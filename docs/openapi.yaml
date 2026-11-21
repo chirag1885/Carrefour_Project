@@ -1,0 +1,2286 @@
+openapi: 3.1.0
+info:
+  title: Smart Wishlist API
+  version: 1.0.0
+  description: Phase 1 API contract draft for Chirag's review. Amounts are in AED.
+servers:
+  - url: /api/v1
+    description: Versioned API base path.
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Registration, JWT sessions, and refresh.
+  - name: Catalogue
+    description: Product browsing, product details, price history, and suggestions.
+  - name: Wishlists
+    description: Wishlist and wishlist item management.
+  - name: Sharing
+    description: Wishlist links and gifting claims.
+  - name: Cart
+    description: Active shopping cart.
+  - name: Notifications
+    description: Read and interact with the notification feed.
+  - name: Preferences
+    description: Notification preferences and push subscriptions.
+  - name: Stores
+    description: Store locations and home store selection.
+  - name: Admin
+    description: Price and stock management, simulator controls, analytics, and dead-letter tools.
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      operationId: register
+      summary: Create a customer account
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      operationId: login
+      summary: Create a JWT session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      operationId: refreshSession
+      summary: Rotate the refresh token and issue a new access token
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products:
+    get:
+      tags:
+        - Catalogue
+      operationId: listProducts
+      summary: Search and browse products
+      parameters:
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+          description: Search product names.
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+          description: Filter by canonical category.
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products/{id}:
+    get:
+      tags:
+        - Catalogue
+      operationId: getProduct
+      summary: Get product details, badges, and offers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetails'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /products/{id}/price-history:
+    get:
+      tags:
+        - Catalogue
+      operationId: getPriceHistory
+      summary: Get product price history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum:
+              - 7d
+              - 30d
+              - 90d
+              - 1y
+            default: 30d
+          description: Lookback range for the chart.
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistory'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /products/{id}/prediction:
+    get:
+      tags:
+        - Catalogue
+      operationId: getPricePrediction
+      summary: Get a buy-now-or-wait recommendation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prediction'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /products/{id}/similar:
+    get:
+      tags:
+        - Catalogue
+      operationId: getSimilarProducts
+      summary: List similar products in stock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /wishlists:
+    get:
+      tags:
+        - Wishlists
+      operationId: listWishlists
+      summary: List the caller's wishlists
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Wishlist'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Wishlists
+      operationId: createWishlist
+      summary: Create a named wishlist
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishlistName'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /wishlists/{id}:
+    patch:
+      tags:
+        - Wishlists
+      operationId: renameWishlist
+      summary: Rename a wishlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishlistName'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Wishlists
+      operationId: deleteWishlist
+      summary: Delete a wishlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /wishlists/{id}/items:
+    get:
+      tags:
+        - Wishlists
+      operationId: listWishlistItems
+      summary: List wishlist items with live price and stock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishlistItemPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Wishlists
+      operationId: addWishlistItem
+      summary: Add a product to a wishlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWishlistItem'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishlistItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /wishlists/{id}/items/{itemId}:
+    patch:
+      tags:
+        - Wishlists
+      operationId: updateWishlistItem
+      summary: Update a target price or alert options
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishlistItemOptions'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishlistItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Wishlists
+      operationId: removeWishlistItem
+      summary: Remove a product from a wishlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /wishlists/{id}/items/{itemId}/move-to-cart:
+    post:
+      tags:
+        - Wishlists
+      operationId: moveWishlistItemToCart
+      summary: Move a wishlist item to the active cart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveOptions'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /wishlists/{id}/move-all-to-cart:
+    post:
+      tags:
+        - Wishlists
+      operationId: moveAvailableWishlistItemsToCart
+      summary: Move all in-stock wishlist items to the active cart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /wishlists/{id}/trends:
+    get:
+      tags:
+        - Wishlists
+      operationId: getWishlistTrends
+      summary: Get wishlist value trends and savings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishlistTrends'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /wishlists/{id}/share:
+    post:
+      tags:
+        - Sharing
+      operationId: createWishlistShare
+      summary: Create a wishlist share link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareOptions'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shared/{token}:
+    get:
+      tags:
+        - Sharing
+      operationId: getSharedWishlist
+      summary: View a shared wishlist
+      description: The token grants access to the public item projection and excludes the owner's personal data.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedWishlist'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shared/{token}/items/{itemId}/claim:
+    post:
+      tags:
+        - Sharing
+      operationId: claimSharedWishlistItem
+      summary: Claim an item for gifting
+      description: Requires a valid share token in addition to the bearer token.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftClaim'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cart:
+    get:
+      tags:
+        - Cart
+      operationId: getCart
+      summary: Get the active cart
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /cart/items:
+    post:
+      tags:
+        - Cart
+      operationId: addCartItem
+      summary: Add a product to the active cart
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCartItem'
+      responses:
+        '201':
+          description: Resource created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cart/items/{productId}:
+    delete:
+      tags:
+        - Cart
+      operationId: removeCartItem
+      summary: Remove a product from the active cart
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications:
+    get:
+      tags:
+        - Notifications
+      operationId: listNotifications
+      summary: List the caller's notifications
+      parameters:
+        - name: unread
+          in: query
+          schema:
+            type: boolean
+          description: Return only unread items when true.
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Return items created after reconnect watermark.
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/{id}/read:
+    post:
+      tags:
+        - Notifications
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications/read-all:
+    post:
+      tags:
+        - Notifications
+      operationId: markAllNotificationsRead
+      summary: Mark all of the caller's notifications as read
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/{id}/click:
+    post:
+      tags:
+        - Notifications
+      operationId: recordNotificationClick
+      summary: Record a notification click
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/preferences:
+    get:
+      tags:
+        - Preferences
+      operationId: getPreferences
+      summary: Get notification preferences
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Preferences
+      operationId: replacePreferences
+      summary: Replace notification preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Preferences'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/push-subscription:
+    post:
+      tags:
+        - Preferences
+      operationId: registerPushSubscription
+      summary: Register a web-push subscription
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscription'
+      responses:
+        '204':
+          description: Success with no response body.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /stores:
+    get:
+      tags:
+        - Stores
+      operationId: listStores
+      summary: List stores
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Store'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/home-store:
+    put:
+      tags:
+        - Stores
+      operationId: setHomeStore
+      summary: Set or clear the caller's home store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HomeStore'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/products/{id}/price:
+    put:
+      tags:
+        - Admin
+      operationId: setProductPrice
+      summary: Set a product price in AED
+      description: Requires the admin role.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPrice'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/products/{id}/stock:
+    put:
+      tags:
+        - Admin
+      operationId: setProductStock
+      summary: Set global or per-store stock
+      description: Requires the admin role.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/BigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetStock'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/simulator/start:
+    post:
+      tags:
+        - Admin
+      operationId: startSimulator
+      summary: Start the product event simulator
+      description: Requires the admin role.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/simulator/stop:
+    post:
+      tags:
+        - Admin
+      operationId: stopSimulator
+      summary: Stop the product event simulator
+      description: Requires the admin role.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/simulator/config:
+    post:
+      tags:
+        - Admin
+      operationId: updateSimulatorConfig
+      summary: Change simulator settings
+      description: Requires the admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulatorConfig'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/analytics/overview:
+    get:
+      tags:
+        - Admin
+      operationId: getAnalyticsOverview
+      summary: Get conversion KPIs
+      description: Requires the admin role.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/dlq:
+    get:
+      tags:
+        - Admin
+      operationId: listDeadLetters
+      summary: List dead-letter entries
+      description: Requires the admin role.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeadLetterPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/dlq/{id}/replay:
+    post:
+      tags:
+        - Admin
+      operationId: replayDeadLetter
+      summary: Request replay of one dead-letter entry
+      description: Requires the admin role.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted for processing.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HttpOnly cookie containing the rotating refresh token.
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque cursor returned in the previous page.
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Page size.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A unique key supplied by the caller and reused for retries.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      schema:
+        type: string
+      description: Previously received ETag.
+  headers:
+    RequestId:
+      description: Identifier for tracing this request.
+      schema:
+        type: string
+    ETag:
+      description: Validator for the current product response.
+      schema:
+        type: string
+    RefreshTokenCookie:
+      description: HttpOnly refresh token cookie.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: A valid authentication credential is required.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The caller does not have the required permission.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The resource does not exist or is inaccessible to the caller.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The request conflicts with current state.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotModified:
+      description: The resource still matches the supplied ETag.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        ETag:
+          $ref: '#/components/headers/ETag'
+  schemas:
+    BigId:
+      type: string
+      pattern: ^[1-9][0-9]*$
+      description: PostgreSQL BIGINT identifier encoded as a string.
+      examples:
+        - '48213'
+    Category:
+      type: string
+      enum:
+        - Electronics
+        - Grocery
+        - Home & Kitchen
+        - Fashion
+        - Beauty & Personal Care
+        - Baby & Kids
+        - Toys & Games
+        - Health & Wellness
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details: {}
+      required:
+        - code
+        - message
+        - details
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+      required:
+        - email
+        - password
+        - fullName
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+      required:
+        - email
+        - password
+    Session:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+        expiresIn:
+          type: integer
+          examples:
+            - 900
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+        - user
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        role:
+          type: string
+          enum:
+            - customer
+            - admin
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        homeStoreId:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+      required:
+        - id
+        - email
+        - fullName
+        - role
+        - locale
+    Product:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/BigId'
+        sku:
+          type: string
+        nameEn:
+          type: string
+          minLength: 1
+          maxLength: 200
+        nameAr:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 200
+            - type: 'null'
+        category:
+          $ref: '#/components/schemas/Category'
+        subcategory:
+          anyOf:
+            - type: string
+            - type: 'null'
+        brand:
+          anyOf:
+            - type: string
+            - type: 'null'
+        imageUrl:
+          anyOf:
+            - type: string
+              format: uri
+            - type: 'null'
+        currentPrice:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        listPrice:
+          anyOf:
+            - type: number
+              minimum: 0
+              maximum: 99999999.99
+              multipleOf: 0.01
+            - type: 'null'
+        currency:
+          type: string
+          enum:
+            - AED
+        totalStock:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - sku
+        - nameEn
+        - category
+        - currentPrice
+        - currency
+        - totalStock
+    ProductDetails:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            descriptionEn:
+              anyOf:
+                - type: string
+                - type: 'null'
+            attributes:
+              type: object
+              additionalProperties: true
+            badges:
+              type: array
+              items:
+                type: string
+                examples:
+                  - Lowest in 90 days
+            offers:
+              type: array
+              items:
+                $ref: '#/components/schemas/Offer'
+          required:
+            - badges
+            - offers
+    Offer:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum:
+            - POINTS_MULTIPLIER
+            - BANK_DISCOUNT_PCT
+        label:
+          type: string
+        value:
+          type: number
+          minimum: 0
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+      required:
+        - id
+        - kind
+        - label
+        - value
+        - validFrom
+        - validTo
+    ProductPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        nextCursor:
+          anyOf:
+            - type: string
+              description: Opaque cursor. Null means the last page.
+            - type: 'null'
+      required:
+        - items
+        - nextCursor
+    PriceHistory:
+      type: object
+      properties:
+        currency:
+          type: string
+          enum:
+            - AED
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              at:
+                type: string
+                format: date-time
+              price:
+                type: number
+                minimum: 0
+                maximum: 99999999.99
+                multipleOf: 0.01
+              minPrice:
+                type: number
+                minimum: 0
+                maximum: 99999999.99
+                multipleOf: 0.01
+              maxPrice:
+                type: number
+                minimum: 0
+                maximum: 99999999.99
+                multipleOf: 0.01
+            required:
+              - at
+              - price
+      required:
+        - currency
+        - points
+    Prediction:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum:
+            - BUY_NOW
+            - WAIT
+            - INSUFFICIENT_DATA
+        reasons:
+          type: array
+          items:
+            type: string
+        predictedSaleAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      required:
+        - verdict
+        - reasons
+    Wishlist:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        isDefault:
+          type: boolean
+        visibility:
+          type: string
+          enum:
+            - private
+            - shared
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - isDefault
+        - visibility
+        - createdAt
+    WishlistName:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - name
+    WishlistItemOptions:
+      type: object
+      properties:
+        targetPrice:
+          anyOf:
+            - type: number
+              minimum: 0
+              maximum: 99999999.99
+              multipleOf: 0.01
+            - type: 'null'
+        notifyOnDrop:
+          type: boolean
+        notifyOnRestock:
+          type: boolean
+        notifyOnLowStock:
+          type: boolean
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+        storeId:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+    AddWishlistItem:
+      allOf:
+        - $ref: '#/components/schemas/WishlistItemOptions'
+        - type: object
+          properties:
+            productId:
+              $ref: '#/components/schemas/BigId'
+          required:
+            - productId
+    WishlistItem:
+      allOf:
+        - $ref: '#/components/schemas/WishlistItemOptions'
+        - type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/BigId'
+            wishlistId:
+              type: string
+              format: uuid
+            product:
+              $ref: '#/components/schemas/Product'
+            addedPrice:
+              type: number
+              minimum: 0
+              maximum: 99999999.99
+              multipleOf: 0.01
+            addedAt:
+              type: string
+              format: date-time
+            badges:
+              type: array
+              items:
+                type: string
+                examples:
+                  - Lowest in 90 days
+          required:
+            - id
+            - wishlistId
+            - product
+            - addedPrice
+            - addedAt
+    WishlistItemPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WishlistItem'
+        nextCursor:
+          anyOf:
+            - type: string
+              description: Opaque cursor. Null means the last page.
+            - type: 'null'
+      required:
+        - items
+        - nextCursor
+    MoveOptions:
+      type: object
+      properties:
+        removeFromWishlist:
+          type: boolean
+          default: true
+        notificationId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+    MoveResult:
+      type: object
+      properties:
+        cart:
+          $ref: '#/components/schemas/Cart'
+        movedItemIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/BigId'
+        skippedItemIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/BigId'
+      required:
+        - cart
+        - movedItemIds
+        - skippedItemIds
+    WishlistTrends:
+      type: object
+      properties:
+        currency:
+          type: string
+          enum:
+            - AED
+        currentTotal:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        addedTotal:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        savings:
+          type: number
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              at:
+                type: string
+                format: date-time
+              total:
+                type: number
+                minimum: 0
+                maximum: 99999999.99
+                multipleOf: 0.01
+            required:
+              - at
+              - total
+      required:
+        - currency
+        - currentTotal
+        - addedTotal
+        - savings
+        - points
+    ShareOptions:
+      type: object
+      properties:
+        permission:
+          type: string
+          enum:
+            - view
+            - contribute
+        expiresAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+    Share:
+      type: object
+      properties:
+        token:
+          type: string
+        permission:
+          type: string
+          enum:
+            - view
+            - contribute
+        expiresAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      required:
+        - token
+        - permission
+    SharedWishlist:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                $ref: '#/components/schemas/BigId'
+              product:
+                $ref: '#/components/schemas/Product'
+              isClaimed:
+                type: boolean
+            required:
+              - id
+              - product
+      required:
+        - name
+        - items
+    GiftClaim:
+      type: object
+      properties:
+        claimedBy:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+        - claimedBy
+    Cart:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - active
+            - converted
+            - abandoned
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        currency:
+          type: string
+          enum:
+            - AED
+        subtotal:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+      required:
+        - id
+        - status
+        - items
+        - currency
+        - subtotal
+    CartItem:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/Product'
+        quantity:
+          type: integer
+          minimum: 1
+        priceAtAdd:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        source:
+          type: string
+          enum:
+            - direct
+            - wishlist
+            - notification
+        sourceNotificationId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+      required:
+        - product
+        - quantity
+        - priceAtAdd
+        - source
+    AddCartItem:
+      type: object
+      properties:
+        productId:
+          $ref: '#/components/schemas/BigId'
+        quantity:
+          type: integer
+          minimum: 1
+      required:
+        - productId
+        - quantity
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - PRICE_DROP
+            - TARGET_REACHED
+            - BACK_IN_STOCK
+            - LOW_STOCK
+            - STORE_BACK_IN_STOCK
+            - SIMILAR_SUGGESTION
+            - DIGEST
+        productId:
+          anyOf:
+            - $ref: '#/components/schemas/BigId'
+            - type: 'null'
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum:
+            - created
+            - deferred
+            - sent
+            - failed
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        clickedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      required:
+        - id
+        - type
+        - payload
+        - status
+        - createdAt
+    NotificationPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        nextCursor:
+          anyOf:
+            - type: string
+              description: Opaque cursor. Null means the last page.
+            - type: 'null'
+      required:
+        - items
+        - nextCursor
+    Preferences:
+      type: object
+      properties:
+        channelInApp:
+          type: boolean
+        channelEmail:
+          type: boolean
+        channelPush:
+          type: boolean
+        channelWhatsapp:
+          type: boolean
+        deliveryMode:
+          type: string
+          enum:
+            - instant
+            - daily_digest
+        digestHourLocal:
+          type: integer
+          minimum: 0
+          maximum: 23
+        quietStart:
+          anyOf:
+            - type: string
+              pattern: ^([01]\d|2[0-3]):[0-5]\d$
+              examples:
+                - '22:00'
+            - type: 'null'
+        quietEnd:
+          anyOf:
+            - type: string
+              pattern: ^([01]\d|2[0-3]):[0-5]\d$
+              examples:
+                - '22:00'
+            - type: 'null'
+        minDropPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+        maxAlertsPerDay:
+          type: integer
+          minimum: 0
+          maximum: 32767
+      required:
+        - channelInApp
+        - channelEmail
+        - channelPush
+        - channelWhatsapp
+        - deliveryMode
+        - digestHourLocal
+        - quietStart
+        - quietEnd
+        - minDropPercent
+        - maxAlertsPerDay
+    PushSubscription:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        expirationTime:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+            - type: 'null'
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required:
+            - p256dh
+            - auth
+      required:
+        - endpoint
+        - keys
+    Store:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        latitude:
+          anyOf:
+            - type: number
+              minimum: -90
+              maximum: 90
+            - type: 'null'
+        longitude:
+          anyOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: 'null'
+        clickAndCollect:
+          type: boolean
+      required:
+        - id
+        - code
+        - name
+        - city
+        - latitude
+        - longitude
+        - clickAndCollect
+    HomeStore:
+      type: object
+      properties:
+        storeId:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+      required:
+        - storeId
+    SetPrice:
+      type: object
+      properties:
+        price:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        source:
+          type: string
+          enum:
+            - admin
+            - promo
+      required:
+        - price
+    SetStock:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          minimum: 0
+        storeId:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+      required:
+        - quantity
+    SimulatorConfig:
+      type: object
+      properties:
+        eventsPerSecond:
+          type: number
+          minimum: 0
+        seed:
+          type: integer
+    SimulatorStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        config:
+          $ref: '#/components/schemas/SimulatorConfig'
+      required:
+        - running
+        - config
+    AnalyticsOverview:
+      type: object
+      properties:
+        alertsSent:
+          type: integer
+          minimum: 0
+        alertsOpened:
+          type: integer
+          minimum: 0
+        alertsClicked:
+          type: integer
+          minimum: 0
+        wishlistAdds:
+          type: integer
+          minimum: 0
+        cartAddsFromWishlist:
+          type: integer
+          minimum: 0
+        cartAddsFromAlerts:
+          type: integer
+          minimum: 0
+        revenueInfluenced:
+          type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        currency:
+          type: string
+          enum:
+            - AED
+      required:
+        - alertsSent
+        - alertsOpened
+        - alertsClicked
+        - wishlistAdds
+        - cartAddsFromWishlist
+        - cartAddsFromAlerts
+        - revenueInfluenced
+        - currency
+    DeadLetter:
+      type: object
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        lastError:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+      required:
+        - id
+        - topic
+        - failedAt
+        - payload
+    DeadLetterPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeadLetter'
+        nextCursor:
+          anyOf:
+            - type: string
+              description: Opaque cursor. Null means the last page.
+            - type: 'null'
+      required:
+        - items
+        - nextCursor
