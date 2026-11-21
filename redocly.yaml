@@ -1,0 +1,5 @@
+extends:
+  - recommended
+rules:
+  # The project has not assigned a licence to the API draft.
+  info-license: off

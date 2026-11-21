@@ -898,19 +898,20 @@ by connection count (~20–50k per instance). Fallback: SSE or 30 s polling. Liv
 
 ### 12.1 Product catalogue
 
-Source: a free e-commerce dataset (Kaggle "shopping dataset" style, ~1k products) plus
-Faker-generated catalogues to reach 2k (small profile) / 50k (full profile). The importer
-(`scripts/seed_products.py`) cleans names, maps categories to the canonical eight, converts prices
-to AED with a fixed documented rate, assigns images and placeholder embeddings, and inserts with
-`source` / `external_id` so re-runs are idempotent. See [`DATA_SOURCES.md`](DATA_SOURCES.md).
+The seed imports UCI Online Retail products and fills the catalogue with synthetic fixtures.
+The importer cleans names, maps products to the eight canonical categories, converts source prices
+to AED, assigns placeholder images and records `source` and `external_id`. Both profiles contain
+40 demo-priced laptops. [Dataset, licence and FX details](DATA_SOURCES.md)
 
 ### 12.2 Users, wishlists, stores, inventory
 
-Faker: 10,000 users (200 in the small profile), up to 3 wishlists each, ~200,000 wishlist items
-with a Zipf (power-law) distribution so a few products are extremely popular. ~25 UAE stores with
-lat/long; inventory for each product × subset of stores. Offers seeded with mock bank/loyalty
-offers. All seeded passwords are `Demo@1234` (bcrypt cost 10, hashed once and reused). Fixed demo
-accounts: `demo@carrefour.test` (customer) and `admin@carrefour.test` (admin).
+The small profile creates 200 Faker users and two fixed accounts. The full profile creates
+10,000 users in total and about 200,000 wishlist items weighted by Zipf popularity. Every user
+gets a default wishlist, notification preferences and an active cart. The seed creates 12 UAE stores
+with coordinates and matches each product's total stock to its inventory quantities.
+
+Both fixed accounts share the seeded password `Demo@1234`, hashed once with bcrypt cost 10
+per run. Use `demo@carrefour.test` as the customer and `admin@carrefour.test` as the admin.
 
 ### 12.3 Price simulator
 
@@ -1003,8 +1004,9 @@ link in every email, GDPR-style "delete my data" endpoint. `npm audit` / Dependa
 
 ## 18. Live Demo Script
 
-Setup: `docker compose up` seeds data and starts everything. Open customer app (:3000), Arabic
-window, admin panel (:3000/admin), MailHog (:8025), Redpanda Console (:8080).
+For the integrated demo, start the infrastructure and seed the database using the [quick start](#quick-start).
+Start the application services, then open the customer app (:3000), Arabic window, admin
+panel (:3000/admin), MailHog (:8025), and Redpanda Console (:8080).
 
 **Demo 1 — headline use case (~3 min):** log in as `demo@carrefour.test`; show the laptop at AED
 3,000 with chart and prediction; set target 2,500; admin sets price to 2,500; within ~1 s toast
@@ -1082,12 +1084,14 @@ smart-wishlist/
 ├── scripts/                   # download_datasets.py, seed_products.py, seed.py, migrate.sh
 ├── docs/
 │   ├── erd.md                 # Mermaid ERD
-│   ├── openapi.yaml           # frozen API contract
+│   ├── openapi.yaml           # API contract draft for review
 │   └── adr/                   # architecture decision records
 └── .github/workflows/ci.yml   # lint + migrate on every PR
 ```
 
 ### Quick start
+
+Requires Docker with Compose, Make, and Python 3.11 or later.
 
 ```bash
 cp .env.example .env
@@ -1103,7 +1107,12 @@ Ports: Postgres `5432`, Redis `6379`, Redpanda Kafka API `19092` (inside Docker 
 Redpanda Console `8080`, MailHog SMTP/UI `1025`/`8025`, API `8000` (`/api/v1`), Web `3000`.
 
 `SEED_PROFILE` in `.env` selects the default profile for `make seed`; `make seed-small` always
-overrides it with `small`. Seeding is re-runnable (wipes and reloads) and prints row counts.
+overrides it with `small`. Both seed commands replace application data in the configured
+development database in one transaction and print row counts. `make down` stops the stack.
+`make reset` deletes the Compose volumes, restarts the stack and reapplies migrations.
+
+After a migration is applied, add schema changes in a new `YYYYMMDD_NNN_description.sql` file.
+The migration runner checks the checksums of files it has already applied.
 
 Fixed demo accounts (password `Demo@1234`): `demo@carrefour.test` (customer, default wishlist with
 8–12 items including the AED ~3,000 laptop) and `admin@carrefour.test` (admin).
