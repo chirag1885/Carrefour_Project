@@ -1,0 +1,64 @@
+name: Foundation CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Lint OpenAPI and SQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Lint OpenAPI
+        run: npx --yes @redocly/cli@2.82.0 lint docs/openapi.yaml
+      - name: Lint migration SQL
+        run: |
+          python -m pip install sqlfluff==3.5.0
+          sqlfluff lint --dialect postgres --rules LT01,LT02,LT12 db/migrations
+
+  migrations:
+    name: Apply migrations on a fresh Postgres database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Start PostgreSQL
+        run: |
+          cp .env.example .env
+          docker compose up -d --wait --wait-timeout 180 postgres
+      - name: Apply and rerun migrations
+        run: |
+          make migrate
+          make migrate
+      - name: Verify TimescaleDB hypertables and pgvector
+        run: |
+          docker compose exec -T postgres sh -c \
+            'exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+          DO $verify$
+          BEGIN
+              IF (SELECT count(*) FROM timescaledb_information.hypertables
+                  WHERE hypertable_schema = 'public'
+                    AND hypertable_name IN ('price_history', 'analytics_events')) <> 2 THEN
+                  RAISE EXCEPTION 'Expected price_history and analytics_events hypertables';
+              END IF;
+
+              IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+                  RAISE EXCEPTION 'Expected the vector extension';
+              END IF;
+          END
+          $verify$;
+          SQL
+      - name: Show startup logs on failure
+        if: failure()
+        run: docker compose logs postgres
+      - name: Clean up
+        if: always()
+        run: docker compose down --volumes
