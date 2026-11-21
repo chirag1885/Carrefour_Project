@@ -210,6 +210,7 @@ def main():
         db.execute("SELECT pg_advisory_xact_lock(984661562)")
         db.execute("""
             TRUNCATE TABLE
+            refresh_tokens,
                 wishlist_item_claims, wishlist_items, wishlist_shares, wishlists,
                 cart_items, carts, notification_deliveries, notifications, user_preferences,
                 users, product_similarity, offers, inventory, products, stores,
