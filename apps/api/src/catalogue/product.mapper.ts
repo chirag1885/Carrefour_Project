@@ -35,3 +35,16 @@ export function toProduct(r: ProductRow) {
     totalStock: r.total_stock,
   };
 }
+
+// ---- helpers for queries that JOIN products onto another table (wishlist items, cart items) ----
+const COL_LIST = PRODUCT_COLS.split(', ');
+
+/** "p.id AS p_id, p.sku AS p_sku, ..." so product columns never clash with the other table's columns. */
+export const PRODUCT_COLS_JOINED = COL_LIST.map((c) => `p.${c} AS p_${c}`).join(', ');
+
+/** Pulls the p_* columns back out of a joined row. */
+export function productRowFromJoin(r: Record<string, unknown>): ProductRow {
+  const o: Record<string, unknown> = {};
+  for (const c of COL_LIST) o[c] = r[`p_${c}`];
+  return o as unknown as ProductRow;
+}

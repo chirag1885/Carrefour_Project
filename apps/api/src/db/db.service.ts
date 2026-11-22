@@ -1,7 +1,11 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { env } from '../config/env';
-
+/** Anything that can run a query: the pool or a transaction client. */
+export interface Queryable {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query(text: string, params?: any[]): Promise<QueryResult<any>>;
+}
 @Injectable()
 export class DbService implements OnModuleDestroy {
   private readonly log = new Logger('Db');
