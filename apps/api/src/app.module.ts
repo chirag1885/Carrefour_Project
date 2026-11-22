@@ -13,7 +13,7 @@ import { RedisModule } from './redis/redis.module';
 import { StoresModule } from './stores/stores.module';
 import { CartModule } from './cart/cart.module';
 import { WishlistModule } from './wishlist/wishlist.module';
-
+import { AdminModule } from './admin/admin.module';
 @Module({
   imports: [
     DbModule,
@@ -28,6 +28,7 @@ import { WishlistModule } from './wishlist/wishlist.module';
     StoresModule,
     WishlistModule,
     CartModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [
