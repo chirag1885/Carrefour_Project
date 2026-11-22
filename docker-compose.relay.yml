@@ -1,0 +1,25 @@
+services:
+  relay:
+    build:
+      context: ./apps/worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-wishlist}
+      POSTGRES_USER: ${POSTGRES_USER:-wishlist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+      KAFKA_BROKERS: redpanda:9092
+      RELAY_TRANSACTIONAL_ID: ${RELAY_TRANSACTIONAL_ID:-wishlist-outbox-relay}
+      RELAY_BATCH_SIZE: ${RELAY_BATCH_SIZE:-500}
+      RELAY_POLL_MS: ${RELAY_POLL_MS:-200}
+      RELAY_PUBLISH_TIMEOUT_MS: ${RELAY_PUBLISH_TIMEOUT_MS:-10000}
+      RELAY_RETENTION_DAYS: ${RELAY_RETENTION_DAYS:-7}
+      RELAY_METRICS_PORT: "9464"
+    ports:
+      - "127.0.0.1:${RELAY_METRICS_PORT:-9464}:9464"
+    stop_grace_period: 180s
