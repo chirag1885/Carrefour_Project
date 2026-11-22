@@ -11,6 +11,8 @@ import { DbModule } from './db/db.module';
 import { HealthController } from './health/health.controller';
 import { RedisModule } from './redis/redis.module';
 import { StoresModule } from './stores/stores.module';
+import { CartModule } from './cart/cart.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { StoresModule } from './stores/stores.module';
     AuthModule,
     CatalogueModule,
     StoresModule,
+    WishlistModule,
+    CartModule,
   ],
   controllers: [HealthController],
   providers: [
