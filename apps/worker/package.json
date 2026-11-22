@@ -4,11 +4,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start:relay": "node dist/relay.js",
-    "test": "npm run build && node --test test/*.test.cjs"
+    "test": "npm run build && node --test test/*.test.cjs",
+    "start:cache-invalidator": "node dist/cache-invalidator.js"
   },
   "dependencies": {
     "@confluentinc/kafka-javascript": "1.11.0",
     "dotenv": "^17.0.0",
+    "ioredis": "6.0.0",
     "pg": "^8.16.0",
     "zod": "^4.0.0"
   },

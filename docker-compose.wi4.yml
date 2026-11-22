@@ -1,0 +1,18 @@
+services:
+  cache-invalidator:
+    build:
+      context: ./apps/worker
+    command: ["node", "dist/cache-invalidator.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      INVALIDATOR_METRICS_PORT: "9465"
+    ports:
+      - "127.0.0.1:${INVALIDATOR_METRICS_PORT:-9465}:9465"
+    stop_grace_period: 30s

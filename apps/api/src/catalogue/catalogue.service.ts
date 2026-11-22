@@ -4,13 +4,18 @@ import { notFound } from '../common/errors';
 import { money } from '../common/money';
 import { DbService } from '../db/db.service';
 import { ListProductsDto, ProductCursor } from './catalogue.schemas';
+import { ProductCacheService } from './product-cache.service';
+import type { ProductDetailsRow } from './product-cache.service';
 import { PRODUCT_COLS, ProductRow, toProduct } from './product.mapper';
 
 const ID_RE = /^[1-9][0-9]{0,17}$/;
 
 @Injectable()
 export class CatalogueService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly productCache: ProductCacheService,
+  ) {}
 
   async list(dto: ListProductsDto) {
     const cursor = decodeCursor(dto.cursor, ProductCursor);
@@ -40,11 +45,13 @@ export class CatalogueService {
   async getDetails(id: string) {
     if (!ID_RE.test(id)) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
-    const r = await this.db.query<ProductRow & { description_en: string | null; attributes: Record<string, unknown> }>(
-      `SELECT ${PRODUCT_COLS}, description_en, attributes FROM products WHERE id = $1 AND is_active`,
-      [id],
-    );
-    const row = r.rows[0];
+    const row = await this.productCache.get(id, async () => {
+      const r = await this.db.query<ProductDetailsRow>(
+        `SELECT ${PRODUCT_COLS}, description_en, attributes FROM products WHERE id = $1 AND is_active`,
+        [id],
+      );
+      return r.rows[0] ?? null;
+    });
     if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
     const [offers, badges] = await Promise.all([this.offers(row.id, row.category), this.badges(row.id, row.current_price)]);
