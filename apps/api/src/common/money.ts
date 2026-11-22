@@ -1,0 +1,2 @@
+/** pg returns NUMERIC as string. The API contract uses JSON numbers (2 decimals). */
+export const money = (v: string | null | undefined): number | null => (v === null || v === undefined ? null : Number(v));
