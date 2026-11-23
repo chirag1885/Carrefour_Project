@@ -1,20 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { notFound } from '../common/errors';
 import { filsFromNumber, filsFromNumeric, filsToNumber, filsToNumeric } from '../common/money';
+import { MetricsService } from '../common/metrics';
 import { DbService } from '../db/db.service';
 import { PRODUCT_COLS, ProductRow, toProduct } from '../catalogue/product.mapper';
 import { eventProductId, newEventId, OCCURRED_AT_SQL, PriceChangedPayload } from './admin-events';
 import { SetPriceDto } from './admin-products.schemas';
 
 /**
- * ONE statement writes the price history row, the outbox row and the product update, all stamped with the
- * same clock_timestamp().
+ * ONE statement writes the price history row, the outbox row and the product update,
+ * all stamped with the same clock_timestamp().
  *
- * Why clock_timestamp() and not now(): now() is the time the transaction STARTED. Two admins changing the
- * same product can commit in the opposite order to their start times, and the relay publishes in
- * created_at order, so now() could publish 2500 -> 2400 before 3000 -> 2500. The product row lock
- * (SELECT ... FOR UPDATE below) serialises writers, and a timestamp taken after the lock is therefore
- * increasing per product.
+ * Why clock_timestamp() and not now(): now() is the time the transaction STARTED. Two
+ * admins changing the same product can commit in the opposite order to their start times
+ * and the relay publishes in created_at order, so now() could publish 2500->2400 before
+ * 3000->2500. The product row lock serialises writers, and a timestamp taken after the
+ * lock is therefore increasing per product.
  */
 const WRITE_PRICE_SQL = `
 WITH t AS (SELECT clock_timestamp() AS ts),
@@ -36,57 +37,65 @@ RETURNING ${PRODUCT_COLS.split(', ').map((c) => `p.${c}`).join(', ')}`;
 export class PriceWriteService {
   private readonly log = new Logger('PriceWrite');
 
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly metrics: MetricsService,
+  ) {}
 
-  /**
-   * Sets a product price. Same price -> no write, no event, current Product returned (PUT is naturally
-   * idempotent, so a retry never creates a second event). Returns the contract's Product.
-   */
   async setPrice(productId: string, dto: SetPriceDto, adminId: string) {
     const newFils = filsFromNumber(dto.price);
+    const timer = this.metrics.priceWriteDuration.startTimer();
+    let writeResult = 'error';
 
-    const done = await this.db.tx(async (c) => {
-      const locked = await c.query<ProductRow>(
-        `SELECT ${PRODUCT_COLS} FROM products WHERE id = $1 AND is_active FOR UPDATE`,
-        [productId],
-      );
-      const row = locked.rows[0];
-      if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+    try {
+      const done = await this.db.tx(async (c) => {
+        const locked = await c.query<ProductRow>(
+          `SELECT ${PRODUCT_COLS} FROM products WHERE id = $1 AND is_active FOR UPDATE`,
+          [productId],
+        );
+        const row = locked.rows[0];
+        if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
-      const oldFils = filsFromNumeric(row.current_price);
-      if (oldFils === newFils) return { row, change: null };
+        const oldFils = filsFromNumeric(row.current_price);
+        if (oldFils === newFils) return { row, change: null };
 
-      const currency = row.currency.trim();
-      const eventId = newEventId();
-      const event: PriceChangedPayload = {
-        event_id: eventId,
-        event_type: 'price.changed',
-        schema_version: 1,
-        product_id: eventProductId(row.id),
-        sku: row.sku,
-        old_price: filsToNumber(oldFils),
-        new_price: filsToNumber(newFils),
-        currency,
-        source: dto.source,
-      };
+        const currency = row.currency.trim();
+        const eventId = newEventId();
+        const event: PriceChangedPayload = {
+          event_id: eventId,
+          event_type: 'price.changed',
+          schema_version: 1,
+          product_id: eventProductId(row.id),
+          sku: row.sku,
+          old_price: filsToNumber(oldFils),
+          new_price: filsToNumber(newFils),
+          currency,
+          source: dto.source,
+        };
 
-      const updated = await c.query<ProductRow>(WRITE_PRICE_SQL, [
-        row.id,
-        filsToNumeric(newFils),
-        currency,
-        dto.source,
-        eventId,
-        JSON.stringify(event),
-      ]);
-      return { row: updated.rows[0], change: { eventId, oldFils } };
-    });
+        const updated = await c.query<ProductRow>(WRITE_PRICE_SQL, [
+          row.id,
+          filsToNumeric(newFils),
+          currency,
+          dto.source,
+          eventId,
+          JSON.stringify(event),
+        ]);
+        return { row: updated.rows[0], change: { eventId, oldFils } };
+      });
 
-    if (done.change) {
-      this.log.log(
-        `price product=${productId} ${filsToNumeric(done.change.oldFils)}->${filsToNumeric(newFils)} ` +
-          `source=${dto.source} admin=${adminId} event=${done.change.eventId}`,
-      );
+      writeResult = done.change ? 'changed' : 'noop';
+
+      if (done.change) {
+        this.log.log(
+          `price product=${productId} ${filsToNumeric(done.change.oldFils)}->${filsToNumeric(newFils)} ` +
+            `source=${dto.source} admin=${adminId} event=${done.change.eventId}`,
+        );
+      }
+      return toProduct(done.row);
+    } finally {
+      timer();
+      this.metrics.priceWriteTotal.inc({ result: writeResult });
     }
-    return toProduct(done.row);
   }
 }
