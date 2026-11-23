@@ -5,7 +5,8 @@
     "build": "tsc -p tsconfig.json",
     "start:relay": "node dist/relay.js",
     "test": "npm run build && node --test test/*.test.cjs",
-    "start:cache-invalidator": "node dist/cache-invalidator.js"
+    "start:cache-invalidator": "node dist/cache-invalidator.js",
+    "start:simulator": "node dist/simulator.js"
   },
   "dependencies": {
     "@confluentinc/kafka-javascript": "1.11.0",

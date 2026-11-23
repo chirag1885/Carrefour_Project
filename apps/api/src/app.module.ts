@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from './common/http-exception.filter';
 import { IdempotencyInterceptor } from './common/idempotency';
 import { env } from './config/env';
 import { DbModule } from './db/db.module';
+import { MetricsModule } from './common/metrics.module';
 import { HealthController } from './health/health.controller';
 import { RedisModule } from './redis/redis.module';
 import { StoresModule } from './stores/stores.module';
@@ -18,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
   imports: [
     DbModule,
     RedisModule,
+    MetricsModule,
     JwtModule.register({
       global: true,
       secret: env.JWT_SECRET,
