@@ -3,7 +3,7 @@ import { AppError, notFound } from '../common/errors';
 import { money } from '../common/money';
 import { PRODUCT_COLS_JOINED, productRowFromJoin, toProduct } from '../catalogue/product.mapper';
 import { DbService, Queryable } from '../db/db.service';
-import type { AddCartItemDto } from './cart.schemas';
+import type { AddCartItemDto, UpdateCartItemDto } from './cart.schemas';
 
 const BIGID_RE = /^[1-9][0-9]{0,17}$/;
 
@@ -67,6 +67,27 @@ export class CartService {
          ON CONFLICT (cart_id, product_id) DO UPDATE SET qty = EXCLUDED.qty`,
         [cartId, dto.productId, newQty],
       );
+      await c.query('UPDATE carts SET updated_at = now() WHERE id = $1', [cartId]);
+      return this.getCart(c, userId);
+    });
+  }
+    /** Sets the quantity of a line already in the cart. Lowering is always allowed; raising is checked against stock. */
+  async setQuantity(userId: string, productId: string, dto: UpdateCartItemDto) {
+    if (!BIGID_RE.test(productId)) throw notFound('CART_ITEM_NOT_FOUND', 'Item not in cart');
+    return this.db.tx(async (c) => {
+      const cartId = await this.ensureCart(c, userId);
+      const line = await c.query('SELECT qty FROM cart_items WHERE cart_id = $1 AND product_id = $2 FOR UPDATE', [cartId, productId]);
+      if (!line.rows[0]) throw notFound('CART_ITEM_NOT_FOUND', 'Item not in cart');
+
+      if (dto.quantity > line.rows[0].qty) {
+        const p = await c.query('SELECT total_stock, is_active FROM products WHERE id = $1', [productId]);
+        const product = p.rows[0];
+        if (!product || !product.is_active || product.total_stock <= 0) throw new AppError(409, 'OUT_OF_STOCK', 'This product is out of stock');
+        if (dto.quantity > product.total_stock) {
+          throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${product.total_stock} available`, { available: product.total_stock });
+        }
+      }
+      await c.query('UPDATE cart_items SET qty = $3 WHERE cart_id = $1 AND product_id = $2', [cartId, productId, dto.quantity]);
       await c.query('UPDATE carts SET updated_at = now() WHERE id = $1', [cartId]);
       return this.getCart(c, userId);
     });

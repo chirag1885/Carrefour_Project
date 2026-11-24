@@ -13,6 +13,7 @@ import { HealthController } from './health/health.controller';
 import { RedisModule } from './redis/redis.module';
 import { StoresModule } from './stores/stores.module';
 import { CartModule } from './cart/cart.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -31,6 +32,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     StoresModule,
     WishlistModule,
     CartModule,
+    NotificationsModule,
     AdminModule,
     NotificationsModule,
   ],
