@@ -1,0 +1,36 @@
+services:
+  alert-engine:
+    build: ./apps/alerts
+    command: ["node","dist/engine.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    environment: &database
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-wishlist}
+      POSTGRES_USER: ${POSTGRES_USER:-wishlist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env}
+      KAFKA_BROKERS: redpanda:9092
+      ALERT_ENGINE_GROUP_ID: ${ALERT_ENGINE_GROUP_ID:-alert-engine}
+    restart: unless-stopped
+    stop_grace_period: 60s
+  notification-worker:
+    build: ./apps/alerts
+    command: ["node","dist/delivery.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *database
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-alerts@carrefour.test}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      APP_WEB_URL: ${APP_WEB_URL:-http://localhost:3000}
+    restart: unless-stopped
+    stop_grace_period: 60s

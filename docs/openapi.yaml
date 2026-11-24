@@ -22,7 +22,7 @@ tags:
   - name: Notifications
     description: Read and interact with the notification feed.
   - name: Preferences
-    description: Notification preferences and push subscriptions.
+    description: In-app and email notification preferences.
   - name: Stores
     description: Store locations and home store selection.
   - name: Admin
@@ -831,7 +831,7 @@ paths:
           schema:
             type: string
             format: date-time
-          description: Return items created after reconnect watermark.
+          description: Return in-app items delivered after the supplied watermark.
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -846,6 +846,27 @@ paths:
                 $ref: '#/components/schemas/NotificationPage'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/unread-count:
+    get:
+      tags:
+        - Notifications
+      operationId: unreadNotificationCount
+      summary: Count the caller's unread in-app notifications
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+                required:
+                  - count
         '401':
           $ref: '#/components/responses/Unauthorized'
   /notifications/{id}/read:
@@ -947,30 +968,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Preferences'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /me/push-subscription:
-    post:
-      tags:
-        - Preferences
-      operationId: registerPushSubscription
-      summary: Register a web-push subscription
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PushSubscription'
-      responses:
-        '204':
-          description: Success with no response body.
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/RequestId'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2051,8 +2048,14 @@ components:
           type: boolean
         channelPush:
           type: boolean
+          enum:
+            - false
+          description: Reserved for compatibility; unsupported in this phase.
         channelWhatsapp:
           type: boolean
+          enum:
+            - false
+          description: Reserved for compatibility; unsupported in this phase.
         deliveryMode:
           type: string
           enum:
@@ -2095,31 +2098,6 @@ components:
         - quietEnd
         - minDropPercent
         - maxAlertsPerDay
-    PushSubscription:
-      type: object
-      properties:
-        endpoint:
-          type: string
-          format: uri
-        expirationTime:
-          anyOf:
-            - type: integer
-              format: int64
-              minimum: 0
-            - type: 'null'
-        keys:
-          type: object
-          properties:
-            p256dh:
-              type: string
-            auth:
-              type: string
-          required:
-            - p256dh
-            - auth
-      required:
-        - endpoint
-        - keys
     Store:
       type: object
       properties:

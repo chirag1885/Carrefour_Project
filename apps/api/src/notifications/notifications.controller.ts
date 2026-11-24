@@ -1,40 +1,35 @@
-import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body,Controller,Get,HttpCode,Param,Post,Put,Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators';
 import type { AuthUser } from '../common/auth.types';
 import { ZodPipe } from '../common/zod.pipe';
-import { ListNotificationsDto, ListNotificationsQuery } from './notifications.schemas';
+import { z } from 'zod';
+import { FeedQuery,PreferencesSchema,type PreferencesDto } from './notifications.schemas';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationsService) {}
-
+  constructor(private readonly service:NotificationsService) {}
   @Get()
-  list(@CurrentUser() user: AuthUser, @Query(new ZodPipe(ListNotificationsQuery)) q: ListNotificationsDto) {
-    return this.notifications.list(user.id, q);
+  list(@CurrentUser() user:AuthUser,@Query(new ZodPipe(FeedQuery)) query:z.infer<typeof FeedQuery>) {
+    return this.service.list(user.id,query);
   }
-
-  /** Cheap count for the bell badge (not in the original OpenAPI draft: additive). */
   @Get('unread-count')
-  unreadCount(@CurrentUser() user: AuthUser) {
-    return this.notifications.unreadCount(user.id);
-  }
+  count(@CurrentUser() user:AuthUser) {return this.service.unreadCount(user.id);}
+  @Post('read-all') @HttpCode(204)
+  readAll(@CurrentUser() user:AuthUser) {return this.service.readAll(user.id);}
+  @Post(':id/read') @HttpCode(204)
+  read(@CurrentUser() user:AuthUser,@Param('id') id:string) {return this.service.read(user.id,id);}
+  @Post(':id/click') @HttpCode(204)
+  click(@CurrentUser() user:AuthUser,@Param('id') id:string) {return this.service.click(user.id,id);}
+}
 
-  @HttpCode(204)
-  @Post('read-all')
-  async readAll(@CurrentUser() user: AuthUser): Promise<void> {
-    await this.notifications.markAllRead(user.id);
-  }
-
-  @HttpCode(204)
-  @Post(':id/read')
-  async read(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<void> {
-    await this.notifications.markRead(user.id, id);
-  }
-
-  @HttpCode(204)
-  @Post(':id/click')
-  async click(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<void> {
-    await this.notifications.recordClick(user.id, id);
+@Controller('me/preferences')
+export class PreferencesController {
+  constructor(private readonly service:NotificationsService) {}
+  @Get()
+  get(@CurrentUser() user:AuthUser) {return this.service.preferences(user.id);}
+  @Put()
+  put(@CurrentUser() user:AuthUser,@Body(new ZodPipe(PreferencesSchema)) dto:PreferencesDto) {
+    return this.service.replacePreferences(user.id,dto);
   }
 }
