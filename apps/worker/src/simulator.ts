@@ -17,7 +17,7 @@
 import http from 'http';
 import { createServer } from 'http';
 import { Registry, Counter, Gauge } from 'prom-client';
-
+import { Redis } from 'ioredis';
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -151,7 +151,9 @@ function nextPrice(state: ProductState, rng: () => number): number {
 // ---------------------------------------------------------------------------
 // Redis state reader
 // ---------------------------------------------------------------------------
-async function readState(redisClient: import('ioredis').default): Promise<SimulatorState> {
+async function readState(
+  redisClient: Redis
+): Promise<SimulatorState> {
   try {
     const raw = await redisClient.get(STATE_KEY);
     return raw ? (JSON.parse(raw) as SimulatorState) : DEFAULT_STATE;
@@ -164,9 +166,10 @@ async function readState(redisClient: import('ioredis').default): Promise<Simula
 // Main loop
 // ---------------------------------------------------------------------------
 async function run(): Promise<void> {
-  // Dynamic import so we don't need to compile the ioredis types into the entrypoint
-  const { default: Redis } = await import('ioredis');
-  const redis = new Redis(REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2000 });
+  const redis = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 2000
+  });
   redis.on('error', (e: Error) => console.error(JSON.stringify({ event: 'redis_error', message: e.message })));
 
   // Initial login and product load

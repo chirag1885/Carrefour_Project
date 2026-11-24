@@ -15,6 +15,7 @@ import { StoresModule } from './stores/stores.module';
 import { CartModule } from './cart/cart.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AdminModule } from './admin/admin.module';
+import { NotificationsModule } from './notifications/notifications.module';
 @Module({
   imports: [
     DbModule,
@@ -31,6 +32,7 @@ import { AdminModule } from './admin/admin.module';
     WishlistModule,
     CartModule,
     AdminModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [

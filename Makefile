@@ -71,3 +71,14 @@ test-int:
 API_URL ?= http://localhost:8000/api/v1
 ADMIN_EMAIL ?= admin@carrefour.test
 ADMIN_PASSWORD ?= Demo@1234
+
+# --- Phase 4 (in-app and email notifications) ---
+.PHONY: alerts-up alerts-stop test-alert
+alerts-up: migrate
+	docker compose -f docker-compose.yml -f docker-compose.alerts.yml up -d --build alert-engine notification-worker
+
+alerts-stop:
+	docker compose -f docker-compose.yml -f docker-compose.alerts.yml stop alert-engine notification-worker
+
+test-alert:
+	npm --prefix apps/alerts test

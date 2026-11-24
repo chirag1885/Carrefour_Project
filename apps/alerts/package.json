@@ -1,0 +1,23 @@
+{
+  "name": "@smart-wishlist/alerts",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "start:engine": "node dist/engine.js",
+    "start:delivery": "node dist/delivery.js"
+  },
+  "dependencies": {
+    "@confluentinc/kafka-javascript": "1.11.0",
+    "pg": "^8.16.0",
+    "zod": "^4.0.0",
+    "nodemailer": "^7.0.0",
+    "dotenv": "^17.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.17",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.0",
+    "typescript": "^5.9.0"
+  }
+}
