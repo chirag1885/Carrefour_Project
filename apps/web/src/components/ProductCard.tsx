@@ -1,16 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { Heart } from 'lucide-react';
 import { ApiError, api } from '@/lib/api';
-import { aed, PLACEHOLDER_IMG } from '@/lib/format';
+import { PLACEHOLDER_IMG } from '@/lib/format';
 import { useInvalidate, useWishlists } from '@/lib/hooks';
 import type { Product } from '@/lib/types';
+import { CartControl } from './CartControl';
+import { Price } from './Price';
 import { useToast } from './Toast';
 
 export function StockPill({ stock }: { stock: number }) {
   if (stock <= 0) return <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">Out of stock</span>;
-  if (stock <= 5) return <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Only {stock} left</span>;
+  if (stock <= 5) return <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">Only {stock} left</span>;
   return null;
 }
 
@@ -24,49 +26,43 @@ export function ProductCard({ p }: { p: Product }) {
   const { defaultWishlist } = useWishlists();
   const invalidate = useInvalidate();
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
   const discount = p.listPrice && p.listPrice > p.currentPrice ? Math.round((1 - p.currentPrice / p.listPrice) * 100) : 0;
 
   async function wish() {
     if (!defaultWishlist) return;
-    setBusy(true);
     try {
       await api(`/wishlists/${defaultWishlist.id}/items`, { method: 'POST', body: { productId: p.id } });
-      toast('Added to your wishlist');
+      toast('Added to your wishlist ♥');
       await invalidate('/wishlists');
     } catch (e) {
       toast(e instanceof ApiError && e.code === 'ALREADY_IN_WISHLIST' ? 'Already in your wishlist' : (e as Error).message);
-    } finally {
-      setBusy(false);
     }
   }
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100 transition hover:shadow-md">
-      <Link href={`/products/${p.id}`} className="block aspect-square overflow-hidden bg-gray-50">
-        <ProductImage src={p.imageUrl} alt={p.nameEn} className="h-full w-full object-contain p-3 transition group-hover:scale-105" />
-      </Link>
-      <button
-        onClick={wish}
-        disabled={busy}
-        title="Add to wishlist"
-        className="absolute right-2 top-2 rounded-full bg-white/90 p-2 text-lg shadow hover:text-accent disabled:opacity-50"
-      >
-        ♥
+    <div className="group relative flex h-full flex-col rounded-xl bg-white p-3 ring-1 ring-gray-200 transition hover:shadow-lg">
+      {discount > 0 && <span className="absolute left-3 top-3 z-10 rounded bg-deal px-2 py-0.5 text-xs font-bold text-white">-{discount}%</span>}
+      <button onClick={wish} title="Add to wishlist" aria-label="Add to wishlist" className="absolute right-3 top-3 z-10 rounded-full bg-white p-2 text-gray-500 shadow ring-1 ring-gray-100 hover:text-accent">
+        <Heart size={18} />
       </button>
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        {p.brand && <span className="text-xs uppercase tracking-wide text-gray-400">{p.brand}</span>}
-        <Link href={`/products/${p.id}`} className="line-clamp-2 text-sm font-medium hover:text-brand">{p.nameEn}</Link>
-        <div className="mt-auto flex items-baseline gap-2 pt-2">
-          <span className="text-base font-bold text-brand">{aed(p.currentPrice)}</span>
-          {discount > 0 && p.listPrice && (
-            <>
-              <span className="text-xs text-gray-400 line-through">{aed(p.listPrice)}</span>
-              <span className="text-xs font-semibold text-accent">-{discount}%</span>
-            </>
-          )}
+
+      <Link href={`/products/${p.id}`} className="block aspect-square overflow-hidden rounded-lg bg-white">
+        <ProductImage src={p.imageUrl} alt={p.nameEn} className="h-full w-full object-contain p-2 transition group-hover:scale-105" />
+      </Link>
+
+      <div className="mt-2 flex flex-1 flex-col">
+        {p.brand && <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{p.brand}</span>}
+        <Link href={`/products/${p.id}`} className="line-clamp-2 min-h-10 text-sm leading-5 text-gray-800 hover:text-brand">{p.nameEn}</Link>
+
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
+          <Price value={p.currentPrice} className="text-gray-900" />
+          {discount > 0 && p.listPrice && <span className="text-xs text-gray-400 line-through">AED {p.listPrice.toFixed(2)}</span>}
         </div>
-        <StockPill stock={p.totalStock} />
+        <div className="mt-1 min-h-5"><StockPill stock={p.totalStock} /></div>
+
+        <div className="mt-auto pt-3">
+          <CartControl product={p} />
+        </div>
       </div>
     </div>
   );

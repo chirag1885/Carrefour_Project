@@ -104,3 +104,24 @@ export interface MoveResult {
   movedItemIds: string[];
   skippedItemIds: string[];
 }
+
+export type NotificationType =
+  | 'PRICE_DROP'
+  | 'TARGET_REACHED'
+  | 'BACK_IN_STOCK'
+  | 'LOW_STOCK'
+  | 'STORE_BACK_IN_STOCK'
+  | 'SIMILAR_SUGGESTION'
+  | 'DIGEST';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  productId: string | null;
+  product: Product | null;
+  payload: Record<string, unknown>;
+  status: string;
+  createdAt: string;
+  readAt: string | null;
+  clickedAt: string | null;
+}
