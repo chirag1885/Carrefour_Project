@@ -4,12 +4,14 @@ import { decodeCursor,encodeCursor } from '../common/cursor';
 import { notFound } from '../common/errors';
 import { z } from 'zod';
 import { FeedQuery,FeedCursor,type PreferencesDto } from './notifications.schemas';
+import { PRODUCT_COLS_JOINED, productRowFromJoin, toProduct } from '../catalogue/product.mapper';
 
 const VISIBLE = `EXISTS (SELECT 1 FROM notification_deliveries d
   WHERE d.notification_id=n.id AND d.channel='in_app' AND d.status='sent')`;
 interface FeedRow {
   id:string; type:string; product_id:string|null; payload:Record<string,unknown>;
-  status:string; at:string; read_at:Date|null; clicked_at:Date|null;
+  status:string; at:string; read_at:Date|null; clicked_at:Date|null;  p_id:string|null;
+  [column:string]:unknown;
 }
 @Injectable()
 export class NotificationsService {
@@ -18,8 +20,8 @@ export class NotificationsService {
     const cursor=decodeCursor(dto.cursor,FeedCursor);
     const r=await this.db.query<FeedRow>(`SELECT n.id,n.type,n.product_id,n.payload,n.status,
       to_char(n.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at,
-      n.read_at,n.clicked_at
-      FROM notifications n WHERE n.user_id=$1 AND ${VISIBLE}
+            n.read_at,n.clicked_at,${PRODUCT_COLS_JOINED}
+      FROM notifications n LEFT JOIN products p ON p.id=n.product_id WHERE n.user_id=$1 AND ${VISIBLE}
       AND (NOT $2::boolean OR n.read_at IS NULL)
       AND ($3::timestamptz IS NULL OR EXISTS (SELECT 1 FROM notification_deliveries d
         WHERE d.notification_id=n.id AND d.channel='in_app' AND d.sent_at>$3))
@@ -27,7 +29,7 @@ export class NotificationsService {
       ORDER BY n.created_at DESC,n.id DESC LIMIT $6`,
       [userId,dto.unread==='true',dto.since??null,cursor?.at??null,cursor?.id??null,dto.limit+1]);
     const page=r.rows.slice(0,dto.limit), last=page[page.length-1];
-    return {items:page.map(n=>({id:n.id,type:n.type,productId:n.product_id,payload:n.payload,status:n.status,
+    return {items:page.map(n=>({id:n.id,type:n.type,productId:n.product_id,      product:n.p_id==null?null:toProduct(productRowFromJoin(n)),payload:n.payload,status:n.status,
       createdAt:n.at,readAt:n.read_at?.toISOString()??null,clickedAt:n.clicked_at?.toISOString()??null})),
       nextCursor:r.rows.length>dto.limit?encodeCursor({at:last.at,id:last.id}):null};
   }

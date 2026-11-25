@@ -16,7 +16,8 @@ import { CartModule } from './cart/cart.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AdminModule } from './admin/admin.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { InsightsModule } from './insights/insights.module';
+import { SharingModule } from './sharing/sharing.module';
 @Module({
   imports: [
     DbModule,
@@ -34,7 +35,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     CartModule,
     NotificationsModule,
     AdminModule,
-    NotificationsModule,
+        InsightsModule,
+    SharingModule,
   ],
   controllers: [HealthController],
   providers: [
