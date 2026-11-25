@@ -14,6 +14,8 @@ import { RequireAuth } from '@/lib/auth';
 import { aed } from '@/lib/format';
 import { useInvalidate, useWishlists } from '@/lib/hooks';
 import type { ProductDetails } from '@/lib/types';
+import { PricePrediction } from '@/components/PricePrediction';
+import { SimilarProducts } from '@/components/SimilarProducts';
 
 export default function ProductPage() {
   return (
@@ -123,8 +125,10 @@ function Details() {
               Add to wishlist
             </button>
           </div>
+                    <PricePrediction productId={p.id} />
         </aside>
       </div>
+            <SimilarProducts productId={p.id} />
     </div>
   );
 }

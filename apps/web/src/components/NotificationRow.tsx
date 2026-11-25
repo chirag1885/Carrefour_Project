@@ -18,9 +18,10 @@ export function useNotificationActions() {
   return {
     /** Opens the notification's product (or the wishlist), recording the click so it also counts as read. */
     async open(n: AppNotification, afterNavigate?: () => void) {
-      void api(`/notifications/${n.id}/click`, { method: 'POST' })
-        .catch(() => undefined)
-        .finally(() => invalidate('/notifications'));
+      void Promise.all([
+        api(`/notifications/${n.id}/read`, { method: 'POST' }).catch(() => undefined),
+        api(`/notifications/${n.id}/click`, { method: 'POST' }).catch(() => undefined),
+      ]).finally(() => invalidate('/notifications'));
       router.push(n.productId ? `/products/${n.productId}` : '/wishlist');
       afterNavigate?.();
     },

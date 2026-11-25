@@ -5,12 +5,14 @@ import { useState } from 'react';
 import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useCart } from '@/lib/hooks';
+import { useT } from '@/lib/i18n';
 import type { Cart, Product } from '@/lib/types';
 import { useToast } from './Toast';
 
 export function CartControl({ product: p, showLink = false }: { product: Product; showLink?: boolean }) {
   const { data: cart, mutate } = useCart();
   const toast = useToast();
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   const qty = cart?.items.find((i) => i.product.id === p.id)?.quantity ?? 0;
@@ -38,7 +40,7 @@ export function CartControl({ product: p, showLink = false }: { product: Product
         disabled={soldOut || busy}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-brand py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:bg-gray-200 disabled:text-gray-500"
       >
-        <ShoppingCart size={16} /> {soldOut ? 'Out of stock' : busy ? 'Adding…' : 'Add to cart'}
+        <ShoppingCart size={16} /> {soldOut ? t('cart.out') : busy ? t('cart.adding') : t('cart.add')}
       </button>
     );
   }
@@ -55,7 +57,7 @@ export function CartControl({ product: p, showLink = false }: { product: Product
         >
           {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
         </button>
-        <span className="text-sm font-semibold tabular-nums">{qty} in cart</span>
+        <span className="text-sm font-semibold tabular-nums">{qty} {t('cart.inCart')}</span>
         <button
           onClick={() => setQty(qty + 1)}
           disabled={busy || qty >= p.totalStock}
@@ -68,7 +70,7 @@ export function CartControl({ product: p, showLink = false }: { product: Product
       </div>
       {showLink && (
         <Link href="/cart" className="mt-2 block text-center text-sm text-brand hover:underline">
-          Go to cart
+          {t('cart.goto')}
         </Link>
       )}
     </div>

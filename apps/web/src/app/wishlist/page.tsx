@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Heart, Pencil, ShoppingCart, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { Heart, Pencil, Share2, ShoppingCart, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 import { Price } from '@/components/Price';
@@ -12,7 +12,7 @@ import { ApiError, api, fetcher } from '@/lib/api';
 import { RequireAuth } from '@/lib/auth';
 import { aed, pct } from '@/lib/format';
 import { useInvalidate, useWishlists } from '@/lib/hooks';
-import type { MoveResult, Page, Trends, WishlistItem } from '@/lib/types';
+import type { MoveResult, Page, Share, Trends, WishlistItem } from '@/lib/types';
 
 export default function WishlistPage() {
   return (
@@ -86,6 +86,18 @@ function Dashboard() {
       toast(`Moved ${r.movedItemIds.length} to cart${r.skippedItemIds.length ? `, ${r.skippedItemIds.length} out of stock` : ''}`);
       await invalidate('/wishlists', '/cart');
     });
+      const shareList = () =>
+    run(async () => {
+      if (!current) return;
+      const s = await api<Share>(`/wishlists/${current.id}/share`, { method: 'POST', body: { permission: 'view' } });
+      const url = `${window.location.origin}/shared/${s.token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('Share link copied');
+      } catch {
+        window.prompt('Copy this link', url);
+      }
+    });
 
   return (
     <div>
@@ -122,6 +134,7 @@ function Dashboard() {
               <ShoppingCart size={16} /> Move all in-stock to cart
             </button>
             <button onClick={renameList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm ring-1 ring-gray-200 hover:bg-gray-50"><Pencil size={14} /> Rename</button>
+                        <button onClick={shareList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm ring-1 ring-gray-200 hover:bg-gray-50"><Share2 size={14} /> Share</button>
             {!current.isDefault && (
               <button onClick={deleteList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm text-red-600 ring-1 ring-gray-200 hover:bg-red-50"><Trash2 size={14} /> Delete list</button>
             )}

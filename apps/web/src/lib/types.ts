@@ -125,3 +125,33 @@ export interface AppNotification {
   readAt: string | null;
   clickedAt: string | null;
 }
+
+export interface Prediction {
+  verdict: 'BUY_NOW' | 'WAIT' | 'INSUFFICIENT_DATA';
+  reasons: string[];
+  predictedSaleAt: string | null;
+}
+
+export interface Share {
+  token: string;
+  permission: 'view' | 'contribute';
+  expiresAt: string | null;
+}
+
+export interface SharedWishlist {
+  name: string;
+  items: { id: string; product: Product; isClaimed: boolean }[];
+}
+
+export interface Preferences {
+  channelInApp: boolean;
+  channelEmail: boolean;
+  channelPush: boolean;
+  channelWhatsapp: boolean;
+  deliveryMode: 'instant' | 'daily_digest';
+  digestHourLocal: number;
+  quietStart: string | null;
+  quietEnd: string | null;
+  minDropPercent: number;
+  maxAlertsPerDay: number;
+}

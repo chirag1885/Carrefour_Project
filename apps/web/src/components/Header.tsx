@@ -6,12 +6,14 @@ import { useState } from 'react';
 import { ChevronDown, Heart, Search, ShoppingCart, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useCart } from '@/lib/hooks';
+import { useI18n } from '@/lib/i18n';
 import { Dropdown } from './Dropdown';
 import { NotificationBell } from './NotificationBell';
 
 export function Header() {
   const { user, logout } = useAuth();
   const { data: cart } = useCart();
+  const { t, locale, setLocale } = useI18n();
   const router = useRouter();
   const [q, setQ] = useState('');
   const count = cart?.items.reduce((n, i) => n + i.quantity, 0) ?? 0;
@@ -26,8 +28,8 @@ export function Header() {
     <header className="sticky top-0 z-40 shadow-md">
       <div className="bg-brand-dark text-xs text-white/90">
         <div className="mx-auto flex max-w-7xl justify-between px-4 py-1.5">
-          <span>🚚 Free delivery on orders over AED 100</span>
-          <span className="hidden sm:inline">Track prices · Get alerts · Buy at the right time</span>
+          <span>{t('nav.free')}</span>
+          <span className="hidden sm:inline">{t('nav.tagline')}</span>
         </div>
       </div>
 
@@ -41,7 +43,7 @@ export function Header() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search electronics: laptops, phones, headphones…"
+              placeholder={t('nav.search')}
               className="min-w-0 flex-1 px-4 py-2.5 text-sm text-gray-900 outline-none"
             />
             <button className="bg-accent px-5 hover:bg-accent-dark" aria-label="Search">
@@ -49,18 +51,26 @@ export function Header() {
             </button>
           </form>
 
-          <nav className="ml-auto flex items-center gap-1 md:ml-0">
+          <nav className="ms-auto flex items-center gap-1 md:ms-0">
+            <button
+              onClick={() => setLocale(locale === 'en' ? 'ar' : 'en')}
+              className="rounded px-2 py-1 text-sm font-semibold hover:bg-white/10"
+              aria-label="Change language"
+            >
+              {t('nav.lang')}
+            </button>
+
             {user ? (
               <>
                 <Dropdown
                   label="Account"
-                  buttonClassName="flex flex-col items-start rounded px-2 py-1 text-left hover:bg-white/10"
+                  buttonClassName="flex flex-col items-start rounded px-2 py-1 text-start hover:bg-white/10"
                   panelClassName="w-64"
                   trigger={() => (
                     <>
-                      <span className="text-[11px] text-white/80">Hello, {user.fullName.split(' ')[0]}</span>
+                      <span className="text-[11px] text-white/80">{t('nav.hello')}, {user.fullName.split(' ')[0]}</span>
                       <span className="flex items-center gap-1 text-sm font-semibold">
-                        Account <ChevronDown size={14} />
+                        {t('nav.account')} <ChevronDown size={14} />
                       </span>
                     </>
                   )}
@@ -69,10 +79,11 @@ export function Header() {
                     <div className="py-2 text-sm">
                       <p className="truncate border-b px-4 pb-2 text-xs text-gray-500">{user.email}</p>
                       {[
-                        ['/products', 'Browse products'],
-                        ['/wishlist', 'Your wishlists'],
-                        ['/notifications', 'Notifications'],
-                        ['/cart', 'Your cart'],
+                        ['/products', t('nav.browse')],
+                        ['/wishlist', t('nav.yourWishlists')],
+                        ['/notifications', t('nav.notifications')],
+                        ['/settings/notifications', t('nav.settings')],
+                        ['/cart', t('nav.yourCart')],
                       ].map(([href, label]) => (
                         <Link key={href} href={href} onClick={close} className="block px-4 py-2 hover:bg-gray-50">
                           {label}
@@ -84,9 +95,9 @@ export function Header() {
                           await logout();
                           router.replace('/login');
                         }}
-                        className="block w-full border-t px-4 py-2 text-left text-red-600 hover:bg-gray-50"
+                        className="block w-full border-t px-4 py-2 text-start text-red-600 hover:bg-gray-50"
                       >
-                        Sign out
+                        {t('nav.signout')}
                       </button>
                     </div>
                   )}
@@ -94,28 +105,28 @@ export function Header() {
 
                 <Link href="/wishlist" className={iconBtn}>
                   <Heart size={22} />
-                  <span className="hidden text-[11px] lg:block">Wishlist</span>
+                  <span className="hidden text-[11px] lg:block">{t('nav.wishlist')}</span>
                 </Link>
                 <NotificationBell />
                 <Link href="/cart" className={iconBtn}>
                   <span className="relative">
                     <ShoppingCart size={22} />
                     {count > 0 && (
-                      <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold ring-2 ring-brand">
+                      <span className="absolute -end-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold ring-2 ring-brand">
                         {count}
                       </span>
                     )}
                   </span>
-                  <span className="hidden text-[11px] lg:block">Cart</span>
+                  <span className="hidden text-[11px] lg:block">{t('nav.cart')}</span>
                 </Link>
               </>
             ) : (
               <>
                 <Link href="/login" className="flex items-center gap-1.5 rounded px-3 py-2 text-sm font-medium hover:bg-white/10">
-                  <UserIcon size={18} /> Sign in
+                  <UserIcon size={18} /> {t('nav.signin')}
                 </Link>
                 <Link href="/register" className="rounded-full bg-accent px-4 py-2 text-sm font-semibold hover:bg-accent-dark">
-                  Create account
+                  {t('nav.create')}
                 </Link>
               </>
             )}
