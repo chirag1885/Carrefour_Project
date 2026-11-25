@@ -16,7 +16,6 @@ import { CartModule } from './cart/cart.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AdminModule } from './admin/admin.module';
-import { NotificationsModule } from './notifications/notifications.module';
 @Module({
   imports: [
     DbModule,
@@ -34,7 +33,6 @@ import { NotificationsModule } from './notifications/notifications.module';
     CartModule,
     NotificationsModule,
     AdminModule,
-    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [
