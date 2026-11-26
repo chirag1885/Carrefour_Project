@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { RequireAuth } from '@/lib/auth';
 import { aed } from '@/lib/format';
 import { useCart } from '@/lib/hooks';
-import type { Cart } from '@/lib/types';
+import type { Cart, Order } from '@/lib/types';
 
 export default function CartPage() {
   return (
@@ -27,6 +27,21 @@ function CartView() {
   const { data: cart, error, mutate } = useCart();
   const toast = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
+    const [order, setOrder] = useState<Order | null>(null);
+  const [placing, setPlacing] = useState(false);
+
+  async function placeOrder() {
+    setPlacing(true);
+    try {
+      setOrder(await api<Order>('/cart/checkout', { method: 'POST' }));
+      await mutate();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setPlacing(false);
+    }
+  }
+  
 
   async function change(productId: string, run: () => Promise<Cart>) {
     setBusyId(productId);
@@ -40,7 +55,8 @@ function CartView() {
   }
   const setQty = (id: string, quantity: number) => change(id, () => api<Cart>(`/cart/items/${id}`, { method: 'PATCH', body: { quantity } }));
   const remove = (id: string) => change(id, () => api<Cart>(`/cart/items/${id}`, { method: 'DELETE' }));
-
+  if (order) return <OrderSuccess order={order} />;
+  
   if (error) return <p className="text-red-600">{(error as Error).message}</p>;
   if (!cart) return <div className="h-64 animate-pulse rounded-2xl bg-white" />;
 
@@ -112,11 +128,30 @@ function CartView() {
       <aside className="rounded-2xl bg-white p-5 shadow-sm lg:sticky lg:top-40">
         <p className="mb-1 text-sm text-green-700">{cart.subtotal >= 100 ? '✓ Your order qualifies for free delivery' : `Add ${aed(100 - cart.subtotal)} more for free delivery`}</p>
         <p className="text-lg">Subtotal ({units} {units === 1 ? 'item' : 'items'}): <Price value={cart.subtotal} /></p>
-        <button disabled title="Checkout is out of scope for this project" className="mt-4 w-full rounded-full bg-gray-200 py-3 font-semibold text-gray-500">
-          Proceed to checkout (demo)
+               <button onClick={placeOrder} disabled={placing} className="mt-4 w-full rounded-full bg-accent py-3 font-semibold text-white hover:bg-accent-dark disabled:opacity-60">
+          {placing ? 'Placing order…' : 'Place order (demo)'}
         </button>
         <Link href="/products" className="mt-3 block text-center text-sm text-brand hover:underline">Continue shopping</Link>
       </aside>
+    </div>
+  );
+}
+function OrderSuccess({ order }: { order: Order }) {
+  return (
+    <div className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm">
+      <p className="mb-2 text-5xl">🎉</p>
+      <h1 className="text-xl font-bold">Order placed (demo)</h1>
+      <p className="mt-1 text-sm text-gray-500">Order {order.orderId.slice(0, 8)} · no payment was taken</p>
+      <ul className="mt-4 divide-y text-left text-sm">
+        {order.items.map((i) => (
+          <li key={i.productId} className="flex justify-between gap-3 py-2">
+            <span className="truncate">{i.quantity} × {i.name}</span>
+            <span>{aed(i.unitPrice * i.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-lg font-bold">Total {aed(order.total)}</p>
+      <Link href="/products" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-semibold text-white hover:bg-brand-dark">Keep shopping</Link>
     </div>
   );
 }

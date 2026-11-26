@@ -25,3 +25,18 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+.site-container {
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 3rem);
+}
+
+@keyframes pop {
+  from { transform: scale(0.95); opacity: 0.3; }
+  to { transform: scale(1); opacity: 1; }
+}
+.animate-pop {
+  animation: pop 0.5s ease-out;
+}

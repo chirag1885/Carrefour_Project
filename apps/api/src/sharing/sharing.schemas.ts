@@ -8,5 +8,5 @@ export const ShareOptionsSchema = z
   .default({ permission: 'view' }); // the request body is optional in the contract
 export type ShareOptionsDto = z.infer<typeof ShareOptionsSchema>;
 
-export const GiftClaimSchema = z.object({ claimedBy: z.string().trim().min(1).max(120) });
-export type GiftClaimDto = z.infer<typeof GiftClaimSchema>;
+export const CopyWishlistSchema = z.object({ name: z.string().trim().min(1).max(100).optional() }).default({});
+export type CopyWishlistDto = z.infer<typeof CopyWishlistSchema>;

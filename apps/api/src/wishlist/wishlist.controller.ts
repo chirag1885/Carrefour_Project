@@ -39,6 +39,10 @@ export class WishlistController {
   items(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query(new ZodPipe(ListItemsQuery)) q: ListItemsDto) {
     return this.wishlists.listItems(user.id, id, q);
   }
+    @Get('membership')
+  membership(@CurrentUser() user: AuthUser) {
+    return this.wishlists.membership(user.id);
+  }
 
   @Idempotent()
   @Post(':id/items')

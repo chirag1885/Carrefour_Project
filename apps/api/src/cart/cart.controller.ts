@@ -20,7 +20,11 @@ export class CartController {
   add(@CurrentUser() user: AuthUser, @Body(new ZodPipe(AddCartItemSchema)) dto: AddCartItemDto) {
     return this.cart.addItem(user.id, dto);
   }
-
+    @Idempotent()
+  @Post('checkout')
+  checkout(@CurrentUser() user: AuthUser) {
+    return this.cart.checkout(user.id);
+  }
   @Patch('items/:productId')
   setQuantity(
     @CurrentUser() user: AuthUser,

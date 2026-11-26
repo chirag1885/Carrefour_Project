@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Heart, Pencil, Share2, ShoppingCart, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { Heart, ListPlus, Pencil, Share2, ShoppingCart, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
+import { AddToListsPanel } from '@/components/AddToListsPanel';
+import { Dropdown } from '@/components/Dropdown';
 import { Price } from '@/components/Price';
 import { ProductImage, StockPill } from '@/components/ProductCard';
 import { useToast } from '@/components/Toast';
@@ -31,8 +33,8 @@ function Dashboard() {
 
   const current = wishlists.find((w) => w.id === selected) ?? wishlists[0];
 
-  const { data: trends } = useSWR<Trends>(current ? `/wishlists/${current.id}/trends` : null, fetcher);
-  const { data, error, size, setSize, isValidating } = useSWRInfinite<Page<WishlistItem>>(
+  const { data: trends, mutate: mutateTrends } = useSWR<Trends>(current ? `/wishlists/${current.id}/trends` : null, fetcher);
+  const { data, error, size, setSize, isValidating, mutate: mutateItems } = useSWRInfinite<Page<WishlistItem>>(
     (i, prev) => {
       if (!current || (prev && !prev.nextCursor)) return null;
       const p = new URLSearchParams({ limit: '20' });
@@ -40,10 +42,15 @@ function Dashboard() {
       return `/wishlists/${current.id}/items?${p}`;
     },
     fetcher,
-      { revalidateAll: true },
+    { revalidateAll: true },
   );
   const items = data?.flatMap((d) => d.items) ?? [];
   const hasMore = !!data && !!data[data.length - 1].nextCursor;
+
+  /** Re-fetch everything this page shows. Called after every change so nothing needs a manual reload. */
+  const refresh = async () => {
+    await Promise.all([mutateItems(), mutateTrends(), invalidate('/cart', '/wishlists/membership')]);
+  };
 
   const run = async (fn: () => Promise<void>) => {
     try {
@@ -84,16 +91,17 @@ function Dashboard() {
       if (!current) return;
       const r = await api<MoveResult>(`/wishlists/${current.id}/move-all-to-cart`, { method: 'POST' });
       toast(`Moved ${r.movedItemIds.length} to cart${r.skippedItemIds.length ? `, ${r.skippedItemIds.length} out of stock` : ''}`);
-      await invalidate('/wishlists', '/cart');
+      await refresh();
     });
-      const shareList = () =>
+
+  const shareList = () =>
     run(async () => {
       if (!current) return;
       const s = await api<Share>(`/wishlists/${current.id}/share`, { method: 'POST', body: { permission: 'view' } });
       const url = `${window.location.origin}/shared/${s.token}`;
       try {
         await navigator.clipboard.writeText(url);
-        toast('Share link copied');
+        toast('Share link copied. Anyone with it can view and copy this list.');
       } catch {
         window.prompt('Copy this link', url);
       }
@@ -103,7 +111,7 @@ function Dashboard() {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold"><Heart className="text-accent" /> Your wishlists</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold"><Heart className="fill-pink-500 text-pink-500" /> Your wishlists</h1>
           <p className="text-sm text-gray-500">Track prices and get alerted when they drop.</p>
         </div>
         <form onSubmit={(e) => { e.preventDefault(); void createList(); }} className="flex gap-2">
@@ -133,8 +141,8 @@ function Dashboard() {
             <button onClick={moveAll} disabled={items.length === 0} className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50">
               <ShoppingCart size={16} /> Move all in-stock to cart
             </button>
+            <button onClick={shareList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm ring-1 ring-gray-200 hover:bg-gray-50"><Share2 size={14} /> Share list</button>
             <button onClick={renameList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm ring-1 ring-gray-200 hover:bg-gray-50"><Pencil size={14} /> Rename</button>
-                        <button onClick={shareList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm ring-1 ring-gray-200 hover:bg-gray-50"><Share2 size={14} /> Share</button>
             {!current.isDefault && (
               <button onClick={deleteList} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm text-red-600 ring-1 ring-gray-200 hover:bg-red-50"><Trash2 size={14} /> Delete list</button>
             )}
@@ -151,7 +159,7 @@ function Dashboard() {
       )}
 
       <div className="flex flex-col gap-3">
-        {items.map((it) => <ItemRow key={it.id} item={it} listId={current!.id} run={run} />)}
+        {items.map((it) => <ItemRow key={it.id} item={it} listId={current!.id} run={run} refresh={refresh} />)}
       </div>
 
       {hasMore && (
@@ -177,8 +185,17 @@ function Stat({ icon, label, value, good }: { icon: React.ReactNode; label: stri
   );
 }
 
-function ItemRow({ item, listId, run }: { item: WishlistItem; listId: string; run: (fn: () => Promise<void>) => Promise<void> }) {
-  const invalidate = useInvalidate();
+function ItemRow({
+  item,
+  listId,
+  run,
+  refresh,
+}: {
+  item: WishlistItem;
+  listId: string;
+  run: (fn: () => Promise<void>) => Promise<void>;
+  refresh: () => Promise<void>;
+}) {
   const toast = useToast();
   const p = item.product;
   const [target, setTarget] = useState(item.targetPrice?.toString() ?? '');
@@ -195,20 +212,21 @@ function ItemRow({ item, listId, run }: { item: WishlistItem; listId: string; ru
       if (n !== null && (Number.isNaN(n) || n < 0)) return toast('Enter a valid price');
       await api(`/wishlists/${listId}/items/${item.id}`, { method: 'PATCH', body: { targetPrice: n } });
       toast(n === null ? 'Target removed' : `Alert set at ${aed(n)}`);
-      await invalidate('/wishlists');
+      await refresh();
     });
 
   const toCart = () =>
     run(async () => {
       await api(`/wishlists/${listId}/items/${item.id}/move-to-cart`, { method: 'POST', body: {} });
       toast('Moved to cart');
-      await invalidate('/wishlists', '/cart');
+      await refresh();
     });
 
   const remove = () =>
     run(async () => {
       await api(`/wishlists/${listId}/items/${item.id}`, { method: 'DELETE' });
-      await invalidate('/wishlists');
+      toast('Item removed from wishlist');
+      await refresh();
     });
 
   return (
@@ -247,6 +265,18 @@ function ItemRow({ item, listId, run }: { item: WishlistItem; listId: string; ru
         <button onClick={toCart} disabled={unavailable} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:bg-gray-200 disabled:text-gray-500">
           <ShoppingCart size={15} /> {unavailable ? 'Unavailable' : 'Move to cart'}
         </button>
+        <Dropdown
+          label="Add to other wishlists"
+          buttonClassName="flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-brand ring-1 ring-brand hover:bg-brand-light"
+          panelClassName="w-72 p-4"
+          trigger={() => (
+            <>
+              <ListPlus size={15} /> Add to lists
+            </>
+          )}
+        >
+          {(close) => <AddToListsPanel productId={p.id} initialTarget={item.targetPrice?.toString() ?? ''} onDone={close} />}
+        </Dropdown>
         <button onClick={remove} className="flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm text-red-600 ring-1 ring-gray-200 hover:bg-red-50">
           <Trash2 size={15} /> Remove
         </button>

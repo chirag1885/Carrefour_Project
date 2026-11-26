@@ -56,7 +56,7 @@ function Browse() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {!data && !error && Array.from({ length: 10 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-xl bg-white" />)}
         {products.map((p) => <ProductCard key={p.id} p={p} />)}
       </div>

@@ -2,20 +2,18 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
-import { Heart, Tag, Truck } from 'lucide-react';
+import { Tag, Truck } from 'lucide-react';
 import useSWR from 'swr';
+import { AddToListsPanel } from '@/components/AddToListsPanel';
 import { CartControl } from '@/components/CartControl';
 import { Price } from '@/components/Price';
+import { PriceHistoryChart } from '@/components/PriceHistoryChart';
 import { ProductImage, StockPill } from '@/components/ProductCard';
-import { useToast } from '@/components/Toast';
-import { ApiError, api, fetcher } from '@/lib/api';
+import { SimilarProducts } from '@/components/SimilarProducts';
+import { fetcher } from '@/lib/api';
 import { RequireAuth } from '@/lib/auth';
 import { aed } from '@/lib/format';
-import { useInvalidate, useWishlists } from '@/lib/hooks';
 import type { ProductDetails } from '@/lib/types';
-import { PricePrediction } from '@/components/PricePrediction';
-import { SimilarProducts } from '@/components/SimilarProducts';
 
 export default function ProductPage() {
   return (
@@ -28,32 +26,13 @@ export default function ProductPage() {
 function Details() {
   const { id } = useParams<{ id: string }>();
   const { data: p, error } = useSWR<ProductDetails>(`/products/${id}`, fetcher);
-  const { wishlists, defaultWishlist } = useWishlists();
-  const invalidate = useInvalidate();
-  const toast = useToast();
-  const [wlId, setWlId] = useState('');
-  const [target, setTarget] = useState('');
 
   if (error) return <p className="text-red-600">{(error as Error).message}</p>;
   if (!p) return <div className="h-96 animate-pulse rounded-2xl bg-white" />;
 
   const discount = p.listPrice && p.listPrice > p.currentPrice ? Math.round((1 - p.currentPrice / p.listPrice) * 100) : 0;
-  const chosen = wlId || defaultWishlist?.id || '';
   const soldOut = p.totalStock <= 0;
   const attrs = Object.entries(p.attributes ?? {}).filter(([, v]) => v !== null && v !== '' && typeof v !== 'object');
-
-  async function addToWishlist() {
-    if (!p || !chosen) return;
-    try {
-      const body: Record<string, unknown> = { productId: p.id };
-      if (target.trim()) body.targetPrice = Number(target);
-      await api(`/wishlists/${chosen}/items`, { method: 'POST', body });
-      toast(target.trim() ? `Saved. We'll alert you at ${aed(Number(target))}` : 'Added to wishlist ♥');
-      await invalidate('/wishlists');
-    } catch (e) {
-      toast(e instanceof ApiError && e.code === 'ALREADY_IN_WISHLIST' ? 'Already in that wishlist' : (e as Error).message);
-    }
-  }
 
   return (
     <div>
@@ -87,7 +66,11 @@ function Details() {
             </ul>
           )}
 
-          {p.descriptionEn && <p className="mt-4 text-sm leading-relaxed text-gray-700">{p.descriptionEn}</p>}
+          <div className="mt-5 rounded-xl border p-4">
+            <PriceHistoryChart productId={p.id} />
+          </div>
+
+          {p.descriptionEn && <p className="mt-5 text-sm leading-relaxed text-gray-700">{p.descriptionEn}</p>}
 
           {attrs.length > 0 && (
             <table className="mt-4 w-full text-sm">
@@ -115,20 +98,12 @@ function Details() {
           </div>
 
           <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <h2 className="mb-1 flex items-center gap-2 font-semibold"><Heart size={18} className="text-accent" /> Track this price</h2>
-            <p className="mb-3 text-xs text-gray-500">Set a target and we&apos;ll alert you when it&apos;s reached.</p>
-            <select value={chosen} onChange={(e) => setWlId(e.target.value)} className="mb-2 w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm">
-              {wishlists.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-            <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Alert me below… (AED, optional)" inputMode="decimal" className="mb-3 w-full rounded-lg border px-3 py-2 text-sm" />
-            <button onClick={addToWishlist} disabled={!chosen} className="w-full rounded-full border-2 border-accent py-2 font-semibold text-accent hover:bg-accent hover:text-white disabled:opacity-50">
-              Add to wishlist
-            </button>
+            <AddToListsPanel productId={p.id} withTarget />
           </div>
-                    <PricePrediction productId={p.id} />
         </aside>
       </div>
-            <SimilarProducts productId={p.id} />
+
+      <SimilarProducts productId={p.id} />
     </div>
   );
 }
