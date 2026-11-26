@@ -10,3 +10,4 @@ data/raw/
 # Local Postman configuration
 /.postman/
 /postman/
+load-tests/k6/users.json

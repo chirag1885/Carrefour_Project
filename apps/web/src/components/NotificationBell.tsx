@@ -5,12 +5,21 @@ import { Bell } from 'lucide-react';
 import { useLatestNotifications, useUnreadCount } from '@/lib/hooks';
 import { Dropdown } from './Dropdown';
 import { NotificationRow, useNotificationActions } from './NotificationRow';
+import { useEffect, useRef } from 'react';
+import { useToast } from './Toast';
 
 export function NotificationBell() {
   const { data: unread } = useUnreadCount();
   const { data: latest } = useLatestNotifications(8);
   const actions = useNotificationActions();
   const count = unread?.count ?? 0;
+    const toast = useToast();
+  const prev = useRef<number | null>(null);
+  useEffect(() => {
+    if (!unread) return;
+    if (prev.current !== null && unread.count > prev.current) toast('🔔 New notification');
+    prev.current = unread.count;
+  }, [unread, toast]);
 
   return (
     <Dropdown

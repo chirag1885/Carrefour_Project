@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BellRing, Heart, TrendingDown } from 'lucide-react';
+import { LivePriceDrop } from '@/components/LivePriceDrop';
 import { ProductRow } from '@/components/ProductRow';
 import { useAuth } from '@/lib/auth';
 
@@ -42,17 +43,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* illustrative alert card */}
           <div className="hidden md:block">
-            <div className="ml-auto max-w-xs rounded-2xl bg-white p-4 text-gray-900 shadow-2xl">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-green-700">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100"><TrendingDown size={15} /></span>
-                Price drop on your wishlist
-              </div>
-              <p className="text-sm font-medium">Gaming Laptop 15&quot;</p>
-              <p className="mt-1 text-sm"><span className="text-gray-400 line-through">AED 3,000</span> <span className="text-lg font-extrabold text-brand">AED 2,500</span> <span className="ml-1 rounded bg-deal px-1.5 py-0.5 text-xs font-bold text-white">-16.7%</span></p>
-              <p className="mt-1 text-xs text-gray-400">Lowest in 90 days · just now</p>
-            </div>
+            <LivePriceDrop />
           </div>
         </div>
       </section>

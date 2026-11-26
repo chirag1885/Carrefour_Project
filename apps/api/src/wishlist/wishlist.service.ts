@@ -277,6 +277,15 @@ export class WishlistService {
       };
     });
   }
+    /** Which products the caller has saved, and where. Powers the filled heart on product cards. */
+  async membership(userId: string) {
+    const r = await this.db.query(
+      `SELECT product_id::text AS product_id, wishlist_id, id::text AS item_id
+         FROM wishlist_items WHERE user_id = $1 ORDER BY id DESC LIMIT 5000`,
+      [userId],
+    );
+    return r.rows.map((x) => ({ productId: x.product_id as string, wishlistId: x.wishlist_id as string, itemId: x.item_id as string }));
+  }
 
   // ---------- trends ----------
   /**

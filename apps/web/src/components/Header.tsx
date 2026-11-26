@@ -27,14 +27,14 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 shadow-md">
       <div className="bg-brand-dark text-xs text-white/90">
-        <div className="mx-auto flex max-w-7xl justify-between px-4 py-1.5">
+        <div className="site-container flex justify-between py-1.5">
           <span>{t('nav.free')}</span>
           <span className="hidden sm:inline">{t('nav.tagline')}</span>
         </div>
       </div>
 
       <div className="bg-brand text-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className="site-container flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
           <Link href="/" className="shrink-0 text-xl font-extrabold tracking-tight">
             Smart<span className="text-red-300">Wishlist</span>
           </Link>
@@ -78,13 +78,16 @@ export function Header() {
                   {(close) => (
                     <div className="py-2 text-sm">
                       <p className="truncate border-b px-4 pb-2 text-xs text-gray-500">{user.email}</p>
-                      {[
-                        ['/products', t('nav.browse')],
-                        ['/wishlist', t('nav.yourWishlists')],
-                        ['/notifications', t('nav.notifications')],
-                        ['/settings/notifications', t('nav.settings')],
-                        ['/cart', t('nav.yourCart')],
-                      ].map(([href, label]) => (
+                                           {(user.role === 'admin'
+                        ? [['/admin', 'Admin dashboard']]
+                        : [
+                            ['/products', t('nav.browse')],
+                            ['/wishlist', t('nav.yourWishlists')],
+                            ['/notifications', t('nav.notifications')],
+                            ['/settings/notifications', t('nav.settings')],
+                            ['/cart', t('nav.yourCart')],
+                          ]
+                      ).map(([href, label]) => (
                         <Link key={href} href={href} onClick={close} className="block px-4 py-2 hover:bg-gray-50">
                           {label}
                         </Link>

@@ -92,7 +92,54 @@ export class CartService {
       return this.getCart(c, userId);
     });
   }
+    /** Demo checkout: converts the active cart and records PURCHASE_MOCK events (with alert attribution). No payment, stock untouched. */
+  async checkout(userId: string) {
+    return this.db.tx(async (c) => {
+      const cart = await c.query(`SELECT id FROM carts WHERE user_id = $1 AND status = 'active' FOR UPDATE`, [userId]);
+      if (!cart.rows[0]) throw new AppError(409, 'EMPTY_CART', 'Your cart is empty');
+      const cartId = cart.rows[0].id as string;
 
+      const lines = await c.query(
+        `SELECT ci.product_id, ci.qty, ci.source_notification_id, p.current_price, p.total_stock, p.is_active, p.name_en
+           FROM cart_items ci JOIN products p ON p.id = ci.product_id
+          WHERE ci.cart_id = $1
+          FOR UPDATE OF ci`,
+        [cartId],
+      );
+      if (lines.rows.length === 0) throw new AppError(409, 'EMPTY_CART', 'Your cart is empty');
+
+      const unavailable = lines.rows.filter((l) => !l.is_active || l.total_stock < l.qty);
+      if (unavailable.length > 0) {
+        throw new AppError(409, 'ITEMS_UNAVAILABLE', 'Some items are no longer available in the quantity you chose', {
+          items: unavailable.map((l) => l.name_en),
+        });
+      }
+
+      let totalCents = 0;
+      for (const l of lines.rows) {
+        const lineCents = Math.round(Number(l.current_price) * 100) * l.qty;
+        totalCents += lineCents;
+        await c.query(
+          `INSERT INTO analytics_events (event_type, user_id, product_id, notification_id, amount)
+           VALUES ('PURCHASE_MOCK', $1, $2, $3, $4)`,
+          [userId, l.product_id, l.source_notification_id, lineCents / 100],
+        );
+      }
+      await c.query(`UPDATE carts SET status = 'converted', updated_at = now() WHERE id = $1`, [cartId]);
+
+      return {
+        orderId: cartId,
+        total: totalCents / 100,
+        currency: 'AED',
+        items: lines.rows.map((l) => ({
+          productId: String(l.product_id),
+          name: l.name_en as string,
+          quantity: l.qty as number,
+          unitPrice: Number(l.current_price),
+        })),
+      };
+    });
+  }
   async removeItem(userId: string, productId: string) {
     if (!BIGID_RE.test(productId)) throw notFound('CART_ITEM_NOT_FOUND', 'Item not in cart');
     return this.db.tx(async (c) => {

@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PRODUCT_COLS_JOINED, productRowFromJoin, toProduct } from '../catalogue/product.mapper';
-import { badRequest, conflict, forbidden, notFound } from '../common/errors';
+import { AppError, badRequest, notFound } from '../common/errors';
 import { DbService } from '../db/db.service';
-import type { GiftClaimDto, ShareOptionsDto } from './sharing.schemas';
+import type { CopyWishlistDto, ShareOptionsDto } from './sharing.schemas';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BIGID_RE = /^[1-9][0-9]{0,17}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const MAX_WISHLISTS = 20;
+
+interface WishlistRow {
+  id: string;
+  name: string;
+  is_default: boolean;
+  visibility: string;
+  created_at: Date;
+}
 
 @Injectable()
 export class SharingService {
@@ -37,7 +45,7 @@ export class SharingService {
   /** An unknown, malformed or expired token is always the same "not found". */
   private async resolve(token: string): Promise<{ wishlist_id: string; name: string; user_id: string }> {
     if (!TOKEN_RE.test(token)) throw notFound('SHARE_NOT_FOUND', 'This link is invalid or has expired');
-        const r = await this.db.query<{ wishlist_id: string; name: string; user_id: string }>(
+    const r = await this.db.query<{ wishlist_id: string; name: string; user_id: string }>(
       `SELECT s.wishlist_id, w.name, w.user_id
          FROM wishlist_shares s JOIN wishlists w ON w.id = s.wishlist_id
         WHERE s.token = $1 AND (s.expires_at IS NULL OR s.expires_at > now())`,
@@ -45,38 +53,66 @@ export class SharingService {
     );
     if (!r.rows[0]) throw notFound('SHARE_NOT_FOUND', 'This link is invalid or has expired');
     return r.rows[0];
-}
+  }
 
-  /** Public view: only product info and whether it is already claimed. No owner details, no target prices. */
+  /** Public, read-only view: product info only. No owner details, no target prices. */
   async view(token: string) {
     const s = await this.resolve(token);
     const r = await this.db.query(
-      `SELECT wi.id, (c.item_id IS NOT NULL) AS is_claimed, ${PRODUCT_COLS_JOINED}
-         FROM wishlist_items wi
-         JOIN products p ON p.id = wi.product_id
-         LEFT JOIN wishlist_item_claims c ON c.item_id = wi.id
-        WHERE wi.wishlist_id = $1
+      `SELECT wi.id, ${PRODUCT_COLS_JOINED}
+         FROM wishlist_items wi JOIN products p ON p.id = wi.product_id
+        WHERE wi.wishlist_id = $1 AND p.is_active
         ORDER BY wi.id DESC LIMIT 200`,
       [s.wishlist_id],
     );
     return {
       name: s.name,
-      items: r.rows.map((row) => ({ id: String(row.id), product: toProduct(productRowFromJoin(row)), isClaimed: row.is_claimed as boolean })),
+      items: r.rows.map((row) => ({ id: String(row.id), product: toProduct(productRowFromJoin(row)) })),
     };
   }
 
-  async claim(userId: string, token: string, itemId: string, dto: GiftClaimDto): Promise<void> {
+  /** Copies the whole shared wishlist into a NEW wishlist of the caller (optionally renamed). */
+  async copy(userId: string, token: string, dto: CopyWishlistDto) {
     const s = await this.resolve(token);
-    if (!BIGID_RE.test(itemId)) throw notFound('ITEM_NOT_FOUND', 'Item not found');
-    if (s.user_id === userId) throw forbidden('OWNER_CANNOT_CLAIM', 'You cannot claim items on your own wishlist');
+    const n = await this.db.query<{ n: number }>('SELECT count(*)::int AS n FROM wishlists WHERE user_id = $1', [userId]);
+    if (n.rows[0].n >= MAX_WISHLISTS) throw new AppError(409, 'WISHLIST_LIMIT', `You can have at most ${MAX_WISHLISTS} wishlists`);
 
-    const item = await this.db.query('SELECT id FROM wishlist_items WHERE id = $1 AND wishlist_id = $2', [itemId, s.wishlist_id]);
-    if (!item.rows[0]) throw notFound('ITEM_NOT_FOUND', 'Item not found');
-
-    const ins = await this.db.query(
-      'INSERT INTO wishlist_item_claims (item_id, claimed_by) VALUES ($1, $2) ON CONFLICT (item_id) DO NOTHING',
-      [itemId, dto.claimedBy],
-    );
-    if (ins.rowCount === 0) throw conflict('ALREADY_CLAIMED', 'Someone has already claimed this gift');
+    try {
+      return await this.db.tx(async (c) => {
+        let name = dto.name ?? s.name;
+        if (!dto.name) {
+          // no name chosen: pick "<name> (2)", "<name> (3)"... until it is free
+          let i = 2;
+          while (i < 50 && (await c.query('SELECT 1 FROM wishlists WHERE user_id = $1 AND name = $2', [userId, name])).rows[0]) {
+            name = `${s.name} (${i})`;
+            i++;
+          }
+        }
+        const w = await c.query<WishlistRow>(
+          'INSERT INTO wishlists (user_id, name) VALUES ($1, $2) RETURNING id, name, is_default, visibility, created_at',
+          [userId, name],
+        );
+        const copied = await c.query(
+          `INSERT INTO wishlist_items (wishlist_id, user_id, product_id, added_price)
+           SELECT $1, $2, wi.product_id, p.current_price
+             FROM wishlist_items wi JOIN products p ON p.id = wi.product_id
+            WHERE wi.wishlist_id = $3 AND p.is_active
+            ORDER BY wi.id LIMIT 500`,
+          [w.rows[0].id, userId, s.wishlist_id],
+        );
+        const row = w.rows[0];
+        return {
+          id: row.id,
+          name: row.name,
+          isDefault: row.is_default,
+          visibility: row.visibility,
+          createdAt: row.created_at.toISOString(),
+          itemCount: copied.rowCount ?? 0,
+        };
+      });
+    } catch (e) {
+      if ((e as { code?: string }).code === '23505') throw new AppError(409, 'WISHLIST_NAME_TAKEN', 'You already have a wishlist with this name');
+      throw e;
+    }
   }
 }

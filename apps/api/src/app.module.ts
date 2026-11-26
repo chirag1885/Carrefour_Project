@@ -18,6 +18,7 @@ import { WishlistModule } from './wishlist/wishlist.module';
 import { AdminModule } from './admin/admin.module';
 import { InsightsModule } from './insights/insights.module';
 import { SharingModule } from './sharing/sharing.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 @Module({
   imports: [
     DbModule,
@@ -37,6 +38,7 @@ import { SharingModule } from './sharing/sharing.module';
     AdminModule,
         InsightsModule,
     SharingModule,
+        AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

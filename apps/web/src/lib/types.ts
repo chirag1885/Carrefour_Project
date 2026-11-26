@@ -140,9 +140,19 @@ export interface Share {
 
 export interface SharedWishlist {
   name: string;
-  items: { id: string; product: Product; isClaimed: boolean }[];
+  items: { id: string; product: Product }[];
 }
 
+export interface PriceHistory {
+  currency: string;
+  points: { at: string; price: number }[];
+}
+
+export interface MembershipEntry {
+  productId: string;
+  wishlistId: string;
+  itemId: string;
+}
 export interface Preferences {
   channelInApp: boolean;
   channelEmail: boolean;
@@ -154,4 +164,53 @@ export interface Preferences {
   quietEnd: string | null;
   minDropPercent: number;
   maxAlertsPerDay: number;
+}
+
+export interface Order {
+  orderId: string;
+  total: number;
+  currency: string;
+  items: { productId: string; name: string; quantity: number; unitPrice: number }[];
+}
+
+export interface AdminOverview {
+  rangeDays: number;
+  currency: string;
+  alertsSent: number;
+  alertsOpened: number;
+  alertsClicked: number;
+  wishlistAdds: number;
+  cartAddsFromWishlist: number;
+  cartAddsFromAlerts: number;
+  revenueInfluenced: number;
+  revenue: number;
+  purchases: number;
+  openRate: number;
+  ctr: number;
+  funnel: { label: string; value: number }[];
+  byType: { type: string; sent: number; opened: number; clicked: number }[];
+  daily: { day: string; sent: number; clicked: number }[];
+  topWishlisted: { product: Product; adds: number }[];
+}
+
+export interface SystemHealth {
+  db: boolean;
+  redis: boolean;
+  time: string;
+  outbox: { pending: number; oldestSeconds: number | null } | null;
+  deliveries: { pending: number; sent: number; failed: number; dead: number } | null;
+  counts: { users: number; products: number; wishlistItems: number } | null;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  status: string;
+  createdAt: string;
+  readAt: string | null;
+  clickedAt: string | null;
+  userEmail: string;
+  productId: string | null;
+  productName: string | null;
+  deliveries: string | null;
 }

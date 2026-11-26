@@ -60,3 +60,12 @@ export function describeNotification(n: AppNotification): Described {
       return { title: 'Notification', detail: '', tone: 'info', icon: 'digest' };
   }
 }
+
+/** Old price, new price and drop % from an alert (payload keys can be camelCase or snake_case). */
+export function priceInfo(n: AppNotification) {
+  const p = n.payload ?? {};
+  const oldPrice = num(pick(p, 'oldPrice', 'old_price'));
+  const newPrice = num(pick(p, 'newPrice', 'new_price')) ?? n.product?.currentPrice ?? null;
+  const dropPct = num(pick(p, 'dropPct', 'drop_pct')) ?? (oldPrice && newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : null);
+  return { oldPrice, newPrice, dropPct };
+}
